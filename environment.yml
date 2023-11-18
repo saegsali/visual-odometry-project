@@ -1,4 +1,4 @@
-name: visual-odometry2
+name: visual-odometry
 channels:
   - defaults
 dependencies:
