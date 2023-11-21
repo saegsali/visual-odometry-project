@@ -17,7 +17,7 @@ opencv-python = "^4.8.1"
 
 [tool.poetry.dev-dependencies]
 # Add your dev dependencies here
-# pytest = "^6.2.5"
+pytest = "^7.4.3"
 
 [tool.poetry.scripts]
 # Add your scripts here if any
