@@ -1,14 +1,16 @@
 import numpy as np
 import cv2
 
-from sensors import Camera
-from primitives import Features
+from vo.sensors import Camera
+from vo.primitives import Features
 
 
 class Frame:
     """A class to represent a single frame in a video sequence."""
-    
-    def __init__(self, image: np.ndarray, features: Features=None, sensor: Camera=None):
+
+    def __init__(
+        self, image: np.ndarray, features: Features = None, sensor: Camera = None
+    ):
         self.image = image
         self.frame_id = None
         self.features = features
@@ -28,6 +30,3 @@ class Frame:
         # TODO: draw features on image
         Exception("Not Implemented Error")
         return self.image
-    
-    
-    

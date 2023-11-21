@@ -17,6 +17,11 @@
     cd visual-odometry-project
     conda env create -f environment.yml
     ```
+3. **Install the Visual Odometry Package:**
+Install in editable mode using `-e` flag.
+    ```
+    pip install -e . 
+    ```
 
 ### Dataset
 You can use the setup script to download the dataset:

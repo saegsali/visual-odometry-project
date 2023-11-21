@@ -1,0 +1,26 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "vo"
+version = "0.1.0"
+description = "Package for Visual Odometry"
+authors = ["Joel Asper <asperj@ethz.ch>", "Marek Landert <malandert@ethz.ch>", "Luca Schwarzenbach <email@ethz.ch>", "Nicolas Filliol <nfilliol@ethz.ch"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+# Add your dependencies here
+numpy = "^1.26.2"
+opencv-python = "^4.8.1"
+
+[tool.poetry.dev-dependencies]
+# Add your dev dependencies here
+# pytest = "^6.2.5"
+
+[tool.poetry.scripts]
+# Add your scripts here if any
+
+[include]
+format = "sdist"
