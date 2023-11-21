@@ -10,6 +10,9 @@ def to_homogeneous_coordinates(points: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: array of points in homogeneous coordinates, shape = (N, D+1).
     """
+    assert (
+        points.ndim == 2
+    ), "Points must have two dimensions, one for points and one for coordinates"
     return np.concatenate((points, np.ones(shape=(points.shape[0], 1))), axis=-1)
 
 
@@ -22,6 +25,9 @@ def to_cartesian_coordinates(points: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: array of points in cartesian coordinates, shape = (N, D).
     """
+    assert (
+        points.ndim == 2
+    ), "Points must have two dimensions, one for points and one for coordinates"
     return points[:, :-1] / points[:, -1:]
 
 
