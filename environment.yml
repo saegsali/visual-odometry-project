@@ -20,4 +20,5 @@ dependencies:
   - pip:
     - numpy==1.26.2
     - opencv-python==4.8.1.78
-prefix: /Users/joelasper/miniconda3/envs/visual-odometry
+    - black==23
+    - pytest==7.4.3
