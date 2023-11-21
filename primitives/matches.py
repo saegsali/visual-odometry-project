@@ -1,6 +1,6 @@
 import numpy as np
 
-from frame import Frame
+from primitives import Frame
 from features import Features
 
 class Matches: 
