@@ -1,6 +1,7 @@
 import os
 import glob
 import cv2
+import numpy as np
 
 from vo.primitives import Frame
 
@@ -24,6 +25,7 @@ class Sequence:
         self._rel_data_path = path
         self.data_dir = self.get_data_dir()
         self.camera = camera
+        self.intrinsics = None
         self.idx = 0
         self.increment = increment
         self.images = self._load()
@@ -62,6 +64,18 @@ class Sequence:
         data_path = os.path.join(self.data_dir, "kitti", "05", f"image_{self.camera}")
         image_paths = sorted(glob.glob(data_path + "/*.png"))
         print("Loading {} images from {}".format(len(image_paths), data_path))
+
+        # load intrinsics
+        intrinsics_file = os.path.join(self.data_dir, "kitti", "05", "calib.txt")
+        with open(intrinsics_file, "r") as file:
+            calib_lines = file.readlines()
+            self.intrinsics = calib_matrix_line = calib_lines[2 * self.camera + 1]
+            calib_matrix_values = calib_matrix_line.split(" ")[1:]
+            calib_matrix_values[-1] = calib_matrix_values[-1].split("\n")[0]
+            self.intrinsics = np.array(
+                [float(value) for value in calib_matrix_values]
+            ).reshape(3, 4)[:, :3]
+
         return image_paths
 
     def _load_malaga(self):
@@ -107,7 +121,16 @@ class Sequence:
         image = cv2.imread(self.images[idx])
         frame = Frame(image)
         frame.frame_id = idx
+        frame.intrinsics = self.intrinsics
         return frame
+
+    def get_intrinsics(self) -> np.ndarray:
+        """Return the camera intrinsics matrix.
+
+        Returns:
+            np.ndarray: The intrinsics matrix. (3x3)
+        """
+        return self.intrinsics
 
     def __len__(self) -> int:
         return len(self.images)
@@ -142,6 +165,9 @@ if __name__ == "__main__":
     # A simple example of how to use the Sequence class:
     video = Sequence("kitti", increment=2)  # Choose dataset and increment
     frame = video.get_frame(0)  # Get a frame at a given index
+
+    print("Camera intrinsics:\n", frame.get_intrinsics())  # Get the intrinsics matrix
+    # print(video.get_intrinsics())  # ...this also works (for now)
 
     for i in range(10):
         last_frame = frame

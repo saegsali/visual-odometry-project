@@ -9,11 +9,16 @@ class Frame:
     """A class to represent a single frame in a video sequence."""
 
     def __init__(
-        self, image: np.ndarray, features: Features = None, sensor: Camera = None
+        self,
+        image: np.ndarray,
+        features: Features = None,
+        sensor: Camera = None,
+        intrinsics: np.ndarray = None,
     ):
         self.image = image
         self.frame_id = None
         self.features = features
+        self.intrinsics = None
         self.sensor = sensor
 
     def get_frame_id(self) -> int:
@@ -23,6 +28,14 @@ class Frame:
             int: The frame id.
         """
         return self.frame_id
+
+    def get_intrinsics(self) -> np.ndarray:
+        """Return the camera intrinsics matrix.
+
+        Returns:
+            np.ndarray: The intrinsics matrix. (3x3)
+        """
+        return self.intrinsics
 
     def show(self, other=None) -> None:
         """Show the image of the frame."""
