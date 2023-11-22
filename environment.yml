@@ -20,5 +20,5 @@ dependencies:
   - pip:
     - numpy==1.26.2
     - opencv-python==4.8.1.78
-    - black==23
+    - black==23.11.0
     - pytest==7.4.3
