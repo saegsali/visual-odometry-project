@@ -1,6 +1,7 @@
 import os
 import glob
 import cv2
+import configparser
 import numpy as np
 
 from vo.primitives import Frame
@@ -19,7 +20,13 @@ class Sequence:
     project_name = "visual-odometry-project"
 
     def __init__(
-        self, dataset: str, path: str = "./data", camera: int = 0, increment: int = 1
+        self,
+        dataset: str,
+        path: str = "./data",
+        camera: int = 0,
+        increment: int = 1,
+        rectified: bool = False,
+        use_lowres: bool = False,
     ):
         self.dataset = dataset
         self._rel_data_path = path
@@ -28,6 +35,8 @@ class Sequence:
         self.intrinsics = None
         self.idx = 0
         self.increment = increment
+        self.rectified = rectified
+        self.use_lowres = use_lowres
         self.images = self.__load()
 
     def get_data_dir(self):
@@ -73,7 +82,7 @@ class Sequence:
             calib_matrix_values = calib_matrix_line.split(" ")[1:]
             calib_matrix_values[-1] = calib_matrix_values[-1].split("\n")[0]
             self.intrinsics = np.array(
-                [float(value) for value in calib_matrix_values]
+                [np.float32(value) for value in calib_matrix_values]
             ).reshape(3, 4)[:, :3]
 
         return image_paths
@@ -94,6 +103,51 @@ class Sequence:
             image_paths = sorted(glob.glob(data_path + "/*right.jpg"))
 
         print("Loading {} images from {}".format(len(image_paths), data_path))
+
+        # load intrinsics
+        if self.rectified == False:
+            config_file = "camera_params_raw_1024x768.txt"
+            match self.camera:
+                case 0:
+                    camera = "CAMERA_PARAMS_LEFT"
+                case 1:
+                    camera = "CAMERA_PARAMS_RIGHT"
+        else:  # rectified
+            if self.use_lowres:
+                config_file = "camera_params_rectified_a=0_800x600.txt"
+            else:
+                config_file = "camera_params_rectified_a=0_1024x768.txt"
+            match self.camera:
+                case 0:
+                    camera = "CAMERA_LEFT"
+                case 1:
+                    camera = "CAMERA_RIGHT"
+
+        intrinsics_file = os.path.join(
+            self.data_dir,
+            "malaga-urban-dataset-extract-07",
+            config_file,
+        )
+        config = configparser.ConfigParser()
+        config.read(intrinsics_file)
+
+        intrinsics = config[camera]
+        self.intrinsics = np.array(
+            [
+                [
+                    np.float32(intrinsics["fx"].split("//")[0]),
+                    0,
+                    np.float32(intrinsics["cx"].split("//")[0]),
+                ],
+                [
+                    0,
+                    np.float32(intrinsics["fy"].split("//")[0]),
+                    np.float32(intrinsics["cy"].split("//")[0]),
+                ],
+                [0, 0, 1],
+            ]
+        )
+
         return image_paths
 
     def __load_parking(self):
@@ -107,6 +161,17 @@ class Sequence:
         image_paths = sorted(glob.glob(data_path + "/*.png"))
 
         print("Loading {} images from {}".format(len(image_paths), data_path))
+
+        # load intrinsics
+        intrinsics_file = os.path.join(self.data_dir, "parking", "K.txt")
+        with open(intrinsics_file, "r") as file:
+            file_content = file.read()
+            # Remove whitespaces and newlines
+            file_content = file_content.replace(" ", "")
+            file_content = file_content.replace("\n", "")
+            self.intrinsics = (
+                np.asarray(file_content.split(",")).astype(np.float32).reshape(3, 3)
+            )
         return image_paths
 
     def get_frame(self, idx: int):
@@ -163,7 +228,9 @@ class Sequence:
 
 if __name__ == "__main__":
     # A simple example of how to use the Sequence class:
-    video = Sequence("kitti", increment=2)  # Choose dataset and increment
+    video = Sequence(
+        "malaga", increment=2, rectified=True, camera=1, use_lowres=True
+    )  # Choose dataset and increment
     frame = video.get_frame(0)  # Get a frame at a given index
 
     print("Camera intrinsics:\n", frame.get_intrinsics())  # Get the intrinsics matrix
