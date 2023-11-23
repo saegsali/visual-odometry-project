@@ -24,6 +24,10 @@ class Matches:
             frame (Frame): object of class Frame.
             indices (np.ndarray): array with indices of matching keypoints of the image (with other image), shape = (M, 1).
         """
+        assert (
+            frame.features is not None and frame.features.keypoints is not None
+        ), "Frame must have features with keypoints"
+
         return Frame(
             image=frame.image,
             features=Features(
