@@ -24,7 +24,7 @@ class LandmarksTriangulator:
             matches (Matches): object containing the matches of each frame.
 
         Returns:
-            np.ndarray: array of 3D landmark positions in world coordinates, shape = (N, 3).
+            np.ndarray: array of 3D landmark positions in world coordinates, shape = (N, 3, 1).
         """
         points1 = matches.frame1.features.keypoints
         points2 = matches.frame2.features.keypoints
@@ -35,16 +35,17 @@ class LandmarksTriangulator:
         """Find the fundamental matrix from the given points.
 
         Args:
-            points1 (np.ndarray): array of 2D points/pixels in the first image, shape = (N, 2).
-            points2 (np.ndarray): array of 2D points/pixels in the second image, shape = (N, 2).
+            points1 (np.ndarray): array of 2D points/pixels in the first image, shape = (N, 2, 1).
+            points2 (np.ndarray): array of 2D points/pixels in the second image, shape = (N, 2, 1).
             is_normalized (bool): if False, internally normalize points for better condition number. Defaults to False.
 
         Returns:
             np.ndarray: fundamental matrix, shape = (3, 3).
         """
         assert points1.shape == points2.shape, "Input points dimension mismatch"
-        assert points1.shape[1] == 2, "Points must have two columns for (u,v)"
         assert points1.shape[0] >= 8, "Not enough points for 8-point algorithm"
+        assert points1.shape[1] == 2, "Points must have two rows for (u,v)"
+        assert points1.shape[2] == 1, "Points must be a column vector"
 
         # Useful variables
         N = points1.shape[0]
@@ -61,7 +62,7 @@ class LandmarksTriangulator:
         # Compute Q
         Q = np.empty(shape=(N, 3 * 3))
         for i in range(N):
-            Q[i] = np.kron(points1[i], points2[i])
+            Q[i] = np.kron(points1[i], points2[i]).T
 
         # Perform SVD / least-squares estimation
         assert Q.shape[0] >= Q.shape[1], "Underdetermined system of equations"
@@ -81,3 +82,26 @@ class LandmarksTriangulator:
             print(T1, T2)
 
         return F
+
+    def visualize_fundamental_matrix(self, matches: Matches):
+        """Visualize the computed fundamental matrix in the two frames by drawing
+        the epilines and features.
+
+        Args:
+            matches (Matches): A matches containing the two frames to visualized.
+        """
+
+        F = self.find_fundamental_matrix(
+            matches.frame1.features.keypoints, matches.frame2.features.keypoints
+        )
+
+        img1 = matches.frame1.image
+        img2 = matches.frame2.image
+
+        # Draw images next to each other
+        if img1.ndim < 3 or img1.shape[2] == 1:
+            img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2RGB)
+        if img2.ndim < 3 or img2.shape[2] == 1:
+            img2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2RGB)
+
+        # Draw epilines
