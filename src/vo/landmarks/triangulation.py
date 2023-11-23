@@ -29,6 +29,10 @@ class LandmarksTriangulator:
         points1 = matches.frame1.features.keypoints
         points2 = matches.frame2.features.keypoints
 
+        # TODO: Use find_fundamental_matrix with RANSAC
+        # Normalize points ones and use is_normalized = True to prevent from normalizing each time
+        # Rescale estimated F to account for normalization
+
     def find_fundamental_matrix(
         self, points1: np.ndarray, points2: np.ndarray, is_normalized: bool = False
     ) -> np.ndarray:
@@ -79,8 +83,6 @@ class LandmarksTriangulator:
         # Renormalize if required
         if not is_normalized:
             F = T2.T @ F @ T1
-            print(T1, T2)
-
         return F
 
     def visualize_fundamental_matrix(self, matches: Matches):
@@ -98,6 +100,12 @@ class LandmarksTriangulator:
         img1 = matches.frame1.image
         img2 = matches.frame2.image
 
+        # Compute line parameters in left and right image
+        lines1 = F @ to_homogeneous_coordinates(matches.frame1.features.keypoints)
+        lines2 = F.T @ to_homogeneous_coordinates(
+            matches.frame2.features.keypoints
+        )  # [a b c] @ [x y 1] = 0 -> y = -a/b * x - c/b
+
         # Draw images next to each other
         if img1.ndim < 3 or img1.shape[2] == 1:
             img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2RGB)
@@ -105,3 +113,67 @@ class LandmarksTriangulator:
             img2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2RGB)
 
         # Draw epilines
+        def draw_epilines(img, lines, colors=None):
+            H, W = img.shape[:2]
+
+            if colors is None:
+                colors = np.random.randint(0, 255, (lines.shape[0], 3))
+
+            for i, l in enumerate(lines):
+                # Compute two points on line
+                l = l.flatten()
+                p0 = np.array([0, -l[2] / l[1]]).astype(int)
+                p1 = np.array([W, -l[0] / l[1] * W - l[2] / l[1]]).astype(int)
+                img = cv2.line(img, p0, p1, tuple(colors[i].tolist()))
+
+            return img
+
+        assert lines1.shape == lines2.shape
+        colors = np.random.randint(0, 255, (lines1.shape[0], 3))
+        img1 = draw_epilines(img1, lines2[:50], colors=colors)
+        img2 = draw_epilines(img2, lines1[:50], colors=colors)
+
+        img_both = cv2.hconcat([img1, img2])
+
+        cv2.imshow("Epilines", img_both)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+
+# Example to visualze estimated fundamental matrix using epilines
+if __name__ == "__main__":
+    from vo.primitives.loader import Sequence
+
+    # Load sequence
+    sequence = Sequence("malaga", camera=1, use_lowres=True)
+    frame1 = sequence.get_frame(0)
+    frame2 = sequence.get_frame(1)
+
+    # Compute matches using SIFT (TODO: replace later with our FeatureMatcher)
+    sift = cv2.SIFT_create()
+    keypoints1, descriptors1 = sift.detectAndCompute(frame1.image, None)
+    keypoints2, descriptors2 = sift.detectAndCompute(frame2.image, None)
+
+    keypoints1 = np.array([kp.pt for kp in keypoints1]).reshape(-1, 2, 1)
+    keypoints2 = np.array([kp.pt for kp in keypoints2]).reshape(-1, 2, 1)
+    descriptors1 = np.array(descriptors1)
+    descriptors2 = np.array(descriptors2)
+
+    frame1.features = Features(keypoints1, descriptors1)
+    frame2.features = Features(keypoints2, descriptors2)
+
+    # Match keypoints
+    bf = cv2.BFMatcher()
+    matches = bf.knnMatch(descriptors1, descriptors2, k=2)
+
+    # Apply ratio test
+    good = []
+    for m, n in matches:
+        if m.distance < 0.8 * n.distance:
+            good.append([m.queryIdx, m.trainIdx])
+    good = np.array(good)
+
+    # Visualize fundamental matrix
+    matches = Matches(frame1, frame2, matches=good)
+    triangulator = LandmarksTriangulator()
+    triangulator.visualize_fundamental_matrix(matches)
