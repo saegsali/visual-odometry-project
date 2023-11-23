@@ -80,7 +80,9 @@ def test_find_fundamental_matrix(
 
     # Check with OpenCV implementation
     F_cv, _ = cv2.findFundamentalMat(points1, points2, cv2.FM_8POINT)
-    print(F, F_cv)
+    F_cv = (
+        F_cv * F[-1, -1]
+    )  # Rescale to account for normalization that OpenCV does (last element always 1)
     assert np.allclose(F, F_cv, atol=1e-4)
 
 
