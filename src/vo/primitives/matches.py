@@ -28,8 +28,12 @@ class Matches:
             image=frame.image,
             features=Features(
                 keypoints=frame.features.keypoints[indices],
-                descriptors=frame.features.descriptors[indices],
-                landmarks=frame.features.landmarks[indices],
+                descriptors=None
+                if frame.features.descriptors is None
+                else frame.features.descriptors[indices],
+                landmarks=None
+                if frame.features.landmarks is None
+                else frame.features.landmarks[indices],
             ),
             sensor=frame.sensor,
         )
