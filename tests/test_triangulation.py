@@ -46,6 +46,7 @@ def test_find_fundamental_matrix(
     projection_camera1: np.ndarray,
     projection_camera2: np.ndarray,
     is_normalized: bool = True,
+    use_ransac: bool = False,
 ):
     N = 1000
 
@@ -62,9 +63,12 @@ def test_find_fundamental_matrix(
     points1 = to_cartesian_coordinates(points1)
     points2 = to_cartesian_coordinates(points2)
 
-    F = triangulator.find_fundamental_matrix(
-        points1, points2, is_normalized=is_normalized
-    )
+    if use_ransac:
+        F, inliers = triangulator.find_fundamental_matrix_ransac(points1, points2)
+    else:
+        F = triangulator.find_fundamental_matrix(
+            points1, points2, is_normalized=is_normalized
+        )
 
     # Check that the fundamental matrix is 3x3
     assert F.shape == (3, 3)
@@ -79,14 +83,16 @@ def test_find_fundamental_matrix(
     assert cost_algebraic < 1e-10
 
     # Check with OpenCV implementation
-    F_cv, _ = cv2.findFundamentalMat(points1, points2, cv2.FM_8POINT)
+    if use_ransac:
+        F_cv, _ = cv2.findFundamentalMat(points1, points2, cv2.FM_RANSAC)
+    else:
+        F_cv, _ = cv2.findFundamentalMat(points1, points2, cv2.FM_8POINT)
     F_cv = (
         F_cv * F[-1, -1]
     )  # Rescale to account for normalization that OpenCV does (last element always 1)
     assert np.allclose(F, F_cv, atol=1e-4)
 
 
-# TODO / FIXME: Does not currently work
 def test_find_fundamental_normalize(
     triangulator: LandmarksTriangulator,
     projection_camera1: np.ndarray,
@@ -97,6 +103,19 @@ def test_find_fundamental_normalize(
         projection_camera1=projection_camera1,
         projection_camera2=projection_camera2,
         is_normalized=False,
+    )
+
+
+def test_find_fundamental_ransac(
+    triangulator: LandmarksTriangulator,
+    projection_camera1: np.ndarray,
+    projection_camera2: np.ndarray,
+):
+    test_find_fundamental_matrix(
+        triangulator=triangulator,
+        projection_camera1=projection_camera1,
+        projection_camera2=projection_camera2,
+        use_ransac=True,
     )
 
 

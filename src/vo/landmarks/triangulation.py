@@ -7,14 +7,19 @@ from vo.helpers import (
     normalize_points,
 )
 from vo.primitives import Features, Frame, Matches
+from vo.algorithms import RANSAC
 
 
 class LandmarksTriangulator:
     def __init__(
-        self, ransac_reproj_threshold: float = 3.0, ransac_confidence=0.99
+        self,
+        outlier_ratio: float = 0.5,
+        ransac_threshold: float = 3.0,
+        ransac_confidence=0.99,
     ) -> None:
         """Initializs the landmark triangulator and sets its parameters."""
-        self.ransac_reproj_threshold = ransac_reproj_threshold
+        self.outlier_ratio = outlier_ratio
+        self.ransac_reproj_threshold = ransac_threshold
         self.ransac_confidence = ransac_confidence
 
     def triangulate_matches(self, matches: Matches) -> np.ndarray:
@@ -32,6 +37,49 @@ class LandmarksTriangulator:
         # TODO: Use find_fundamental_matrix with RANSAC
         # Normalize points ones and use is_normalized = True to prevent from normalizing each time
         # Rescale estimated F to account for normalization
+        pass
+
+    def find_fundamental_matrix_ransac(
+        self, points1: np.ndarray, points2: np.ndarray
+    ) -> np.ndarray:
+        """Find the fundamental matrix from the given points using RANSAC.
+
+        Args:
+            points1 (np.ndarray): array of 2D points/pixels in the first image, shape = (N, 2, 1).
+            points2 (np.ndarray): array of 2D points/pixels in the second image, shape = (N, 2, 1).
+            is_normalized (bool): if False, internally normalize points for better condition number. Defaults to False.
+
+        Returns:
+            np.ndarray: fundamental matrix, shape = (3, 3).
+        """
+        ransac_find_fundamental = lambda x: self.find_fundamental_matrix(
+            x[:, 0], x[:, 1], is_normalized=True
+        )
+
+        # Normalize points for better condition number
+        points1, T1 = normalize_points(points1)
+        points2, T2 = normalize_points(points2)
+
+        def error_fn(F, points):
+            # Compte algebraic error r =  p2^T @ F @ p1
+            p1 = to_homogeneous_coordinates(points[:, 0])
+            p2 = to_homogeneous_coordinates(points[:, 1])
+            r = np.sum((p2.transpose((0, 2, 1)) @ F @ p1) ** 2, axis=(1, 2))
+            return r
+
+        ransac_F = RANSAC(
+            s_points=8,
+            population=np.stack([points1, points2], axis=1),
+            model_fn=ransac_find_fundamental,
+            error_fn=error_fn,
+            inlier_threshold=self.ransac_reproj_threshold,
+            outlier_ratio=self.outlier_ratio,
+            confidence=self.ransac_confidence,
+        )
+
+        F, inliers = ransac_F.find_best_model()
+
+        return T2.T @ F @ T1, inliers
 
     def find_fundamental_matrix(
         self, points1: np.ndarray, points2: np.ndarray, is_normalized: bool = False
@@ -69,9 +117,9 @@ class LandmarksTriangulator:
             Q[i] = np.kron(points1[i], points2[i]).T
 
         # Perform SVD / least-squares estimation
-        assert Q.shape[0] >= Q.shape[1], "Underdetermined system of equations"
+        # assert Q.shape[0] >= Q.shape[1], "Underdetermined system of equations"
         _, _, Vh = np.linalg.svd(
-            Q, full_matrices=False
+            Q, full_matrices=True
         )  # overdetermined case, V is fully computed anyways
         F = Vh[-1, :].reshape(3, 3).T  # stacked column-wise
 
