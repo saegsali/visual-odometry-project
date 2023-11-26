@@ -89,8 +89,6 @@ class RANSAC:
                 best_n_inliers = n_inliers
                 best_inliers = inliers
 
-                print(n_inliers)
-
         # Recompute best model using all inliers
         all_inlier_points = self.population[best_inliers]
         best_model = self.model_fn(all_inlier_points)
