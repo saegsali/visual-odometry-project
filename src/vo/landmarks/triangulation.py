@@ -8,16 +8,22 @@ from vo.helpers import (
 )
 from vo.primitives import Features, Frame, Matches
 from vo.algorithms import RANSAC
+from vo.sensors import Camera
 
 
 class LandmarksTriangulator:
     def __init__(
         self,
+        camera1: Camera,
+        camera2: Camera,
         outlier_ratio: float = 0.5,
         ransac_threshold: float = 3.0,
         ransac_confidence=0.99,
     ) -> None:
         """Initializs the landmark triangulator and sets its parameters."""
+        self.camera1 = camera1
+        self.camera2 = camera2
+
         self.outlier_ratio = outlier_ratio
         self.ransac_reproj_threshold = ransac_threshold
         self.ransac_confidence = ransac_confidence
@@ -41,7 +47,7 @@ class LandmarksTriangulator:
 
     def find_fundamental_matrix_ransac(
         self, points1: np.ndarray, points2: np.ndarray
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Find the fundamental matrix from the given points using RANSAC.
 
         Args:
@@ -51,6 +57,7 @@ class LandmarksTriangulator:
 
         Returns:
             np.ndarray: fundamental matrix, shape = (3, 3).
+            np.ndarray: inlier mask
         """
         ransac_find_fundamental = lambda x: self.find_fundamental_matrix(
             x[:, 0], x[:, 1], is_normalized=True
@@ -132,6 +139,109 @@ class LandmarksTriangulator:
         if not is_normalized:
             F = T2.T @ F @ T1
         return F
+
+    def find_essential_matrix(
+        self, points1: np.ndarray, points2: np.ndarray, use_ransac: bool = True
+    ) -> np.ndarray:
+        """Find the essential matrix from the given points.
+
+        Args:
+            points1 (np.ndarray): array of 2D points/pixels in the first image, shape = (N, 2, 1).
+            points2 (np.ndarray): array of 2D points/pixels in the second image, shape = (N, 2, 1).
+            is_normalized (bool): if False, internally normalize points for better condition number. Defaults to False.
+            use_ransac (bool): use RANSAC algorithm for robust estimation. Defaults to True.
+
+        Returns:
+            np.ndarray: essential matrix, shape = (3, 3).
+        """
+        if use_ransac:
+            F, inliers = self.find_fundamental_matrix_ransac(points1, points2)
+            E = self.camera2.intrinsic_matrix.T @ F @ self.camera1.intrinsic_matrix
+            return E, inliers
+        else:
+            F = self.find_fundamental_matrix(points1, points2)
+            E = self.camera2.intrinsic_matrix.T @ F @ self.camera1.intrinsic_matrix
+            return E
+
+    def decompose_essential_matrix(self, E: np.ndarray) -> np.ndarray:
+        """Decomposes the matrix E = [T]x @ R into translation (up to scale) and rotation.
+
+        Args:
+            E (np.ndarray): Essential matrix.
+
+        Returns:
+            np.ndarray: M = 4 * [R T] which transforms points from camera1 frame to camera2 frame.
+                        Note that the four solutions must be disambiguated by triangulating points.
+        """
+        U, S, Vh = np.linalg.svd(E)
+
+        # Translation (unit/direction vector)
+        T = U[:, 2]
+
+        # Compute possible rotations
+        W = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+        R = np.zeros((2, 3, 3))
+        R[0] = U @ W @ Vh
+        R[1] = U @ W.T @ Vh
+        for i in range(2):
+            if np.linalg.det(R[i]) < 0:
+                R[i] *= -1
+
+        # Compute possible transforms
+        M = np.zeros((4, 3, 4))
+
+        for i in range(2):
+            for j in range(2):
+                idx = 2 * i + j
+                M[idx] = np.concatenate([R[j], (-1) ** i * T], axis=-1)
+
+        return M
+
+    def find_relative_pose(
+        self, points1: np.ndarray, points2: np.ndarray, use_ransac: bool = True
+    ) -> np.ndarray:
+        """Computes the transformation matrix M which transforms points from frame 1 into frame 2.
+
+        Args:
+            points1 (np.ndarray): array of 2D points/pixels in the first image, shape = (N, 2, 1).
+            points2 (np.ndarray): array of 2D points/pixels in the second image, shape = (N, 2, 1).
+            use_ransac (bool): use RANSAC algorithm for robust estimation. Defaults to True.
+
+        Returns:
+            np.ndarray: Matrix M = [R T] with shape (3, 4), which transforms points from frame 1 into frame 2.
+            np.ndarray: inliers mask if use_ransac is set to True.
+        """
+        if use_ransac:
+            E, inliers = self.find_essential_matrix(points1, points2, use_ransac=True)
+            points1 = points1[inliers]
+            points2 = points2[inliers]
+        else:
+            E = self.find_essential_matrix(points1, points2, use_ransac=False)
+
+        # Find four possible solutions which need to be checked
+        M = self.decompose_essential_matrix(E)
+
+        # Disambiguate relative pose by triangulating points and counting inliers
+        best_valid = -1
+        best_M = None
+
+        for m in range(M.shape[0]):
+            points3D = self.linear_triangulation(points1, points2, M[m])
+
+            # Count how many points are valid (in front of camera)
+            n_valid = points3D[:, 2] >= 0
+            if n_valid > best_valid:
+                best_valid = n_valid
+                best_M = M[m]
+
+        # If RANSAC was used, return also the inliers mask
+        if use_ransac:
+            return best_M, inliers
+
+        return best_M
+
+    def linear_triangulation(self, points1, points2, M):
+        pass
 
     def visualize_fundamental_matrix(self, matches: Matches):
         """Visualize the computed fundamental matrix in the two frames by drawing
