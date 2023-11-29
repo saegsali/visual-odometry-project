@@ -9,7 +9,9 @@ class Camera:
     for image undistortion, projection, and pose estimation.
     """
 
-    def __init__(self, intrinsic_matrix: np.ndarray, distortion_coeffs: np.ndarray):
+    def __init__(
+        self, intrinsic_matrix: np.ndarray, distortion_coeffs: np.ndarray = None
+    ):
         """
         Initialize the Camera class with intrinsic parameters.
 

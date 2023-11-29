@@ -4,6 +4,7 @@ import pytest
 
 from vo.helpers import to_cartesian_coordinates, to_homogeneous_coordinates
 from vo.landmarks.triangulation import LandmarksTriangulator
+from vo.sensors.camera import Camera
 
 # Test case highly inspired from Exercise 6 "run_test_eight_point.py"
 
@@ -13,7 +14,13 @@ rng = np.random.default_rng(2023)
 # Create fixture for LandmarksTriangulator
 @pytest.fixture
 def triangulator() -> LandmarksTriangulator:
-    return LandmarksTriangulator()
+    camera1 = Camera(
+        intrinsic_matrix=np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]])
+    )
+    camera2 = Camera(
+        intrinsic_matrix=np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]])
+    )
+    return LandmarksTriangulator(camera1=camera1, camera2=camera2)
 
 
 @pytest.fixture
