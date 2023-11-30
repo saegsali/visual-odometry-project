@@ -10,6 +10,7 @@ from vo.helpers import (
 from vo.primitives import Features, Matches
 from vo.algorithms import RANSAC
 from vo.sensors import Camera
+from vo.visualization import PointCloudVisualizer
 
 
 class LandmarksTriangulator:
@@ -35,21 +36,26 @@ class LandmarksTriangulator:
         self._use_opencv = use_opencv
 
     def triangulate_matches(self, matches: Matches) -> np.ndarray:
-        """Triangulate the 3D position of landmarks using matches from two frames.
+        """Triangulate the 3D position of landmarks using matches from two frames,
+        and as a byproduct, estimate the relative pose between frame 1 and frame 2.
 
         Args:
             matches (Matches): object containing the matches of each frame.
 
         Returns:
             np.ndarray: array of 3D landmark positions in world coordinates, shape = (N, 3, 1).
+            np.ndarray: M = [R t] which transforms coordinates from camera frame 1 to camera frame 2, shape = (3, 4).
         """
-        # points1 = matches.frame1.features.keypoints
-        # points2 = matches.frame2.features.keypoints
+        points1 = matches.frame1.features.keypoints
+        points2 = matches.frame2.features.keypoints
 
-        # TODO: Use find_fundamental_matrix with RANSAC
-        # Normalize points ones and use is_normalized = True to prevent from normalizing each time
-        # Rescale estimated F to account for normalization
-        pass
+        # Find relative pose
+        if self._use_ransac:
+            M, landmarks, inliers = self._find_relative_pose(points1, points2)
+            return M, landmarks, inliers
+        else:
+            M, landmarks = self._find_relative_pose(points1, points2)
+            return M, landmarks
 
     def _find_fundamental_matrix_ransac(
         self, points1: np.ndarray, points2: np.ndarray
@@ -231,6 +237,7 @@ class LandmarksTriangulator:
 
         Returns:
             np.ndarray: Matrix M = [R T] with shape (3, 4), which transforms points from frame 1 into frame 2.
+            np.ndarray: triangulated points expressed in coordinates of frame 1, shape = (N, 3, 1).
             np.ndarray: inliers mask if use_ransac is set to True.
         """
         if self._use_ransac:
@@ -250,6 +257,7 @@ class LandmarksTriangulator:
         best_valid = -1
         best_inliers = None
         best_M = None
+        best_triangulated_points = None
 
         for m in range(M2.shape[0]):
             points3D = self._linear_triangulation(
@@ -271,12 +279,13 @@ class LandmarksTriangulator:
                 best_valid = n_valid
                 best_inliers = cheirality_inliers
                 best_M = M2[m]
+                best_triangulated_points = points3D
 
         # If RANSAC was used, return also the inliers mask
         if self._use_ransac:
-            return best_M, best_inliers
+            return best_M, best_triangulated_points, best_inliers
 
-        return best_M
+        return best_M, best_triangulated_points
 
     def _linear_triangulation(self, points1, points2, C1, C2):
         """Linear Triangulation
@@ -376,6 +385,29 @@ class LandmarksTriangulator:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
+    def visualize_triangulation(self, matches: Matches):
+        """Visualize the triangulated points from matches.
+
+        Args:
+            matches (Matches): A matches containing the two frames to visualized.
+        """
+        M, points3D, inliers = self.triangulate_matches(matches)
+
+        camera1 = Camera(
+            intrinsic_matrix=self.camera1.intrinsic_matrix,
+            R=np.eye(3),
+            t=np.zeros((3, 1)),
+        )
+        camera2 = Camera(
+            intrinsic_matrix=self.camera2.intrinsic_matrix, R=M[:, :3], t=M[:, 3:]
+        )
+
+        visualizer = PointCloudVisualizer()
+        visualizer.visualize_camera(camera1)
+        visualizer.visualize_camera(camera2)
+        visualizer.visualize_points(points3D[inliers], color="g")
+        visualizer.visualize_points(points3D[~inliers], color="r")
+
 
 # Example to visualze estimated fundamental matrix using epilines
 if __name__ == "__main__":
@@ -423,3 +455,6 @@ if __name__ == "__main__":
 
         # Store current frame as old frame
         frame1 = frame2
+
+        # Visualize triangulation
+        triangulator.visualize_triangulation(matches)
