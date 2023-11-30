@@ -241,8 +241,10 @@ class LandmarksTriangulator:
             E = self._find_essential_matrix(points1, points2)
 
         # Find four possible solutions which need to be checked
-        M2 = self._decompose_essential_matrix(E)
-        M1 = np.hstack((np.eye(3), np.zeros((3, 1))))
+        M2 = self._decompose_essential_matrix(
+            E
+        )  # relative transform from camera1 to camera2
+        M1 = np.hstack((np.eye(3), np.zeros((3, 1))))  # identity transform
 
         # Disambiguate relative pose by triangulating points and counting inliers
         best_valid = -1
@@ -256,9 +258,13 @@ class LandmarksTriangulator:
                 self.camera1.intrinsic_matrix @ M1,
                 self.camera2.intrinsic_matrix @ M2[m],
             )
+            points3D_frame2 = M2[m][:, :3] @ points3D + M2[m][:, 3:]
 
-            # Count how many points are valid (in front of camera)
-            cheirality_inliers = points3D[:, 2] >= 0
+            # Count how many points are valid (in front of camera1 and camera2)
+            cheirality_inliers1 = points3D[:, -1] >= 0
+            cheirality_inliers2 = points3D_frame2[:, -1] >= 0
+            cheirality_inliers = (cheirality_inliers1 & cheirality_inliers2).flatten()
+
             n_valid = cheirality_inliers.sum()
 
             if n_valid > best_valid:
@@ -290,7 +296,7 @@ class LandmarksTriangulator:
         assert C1.shape == (3, 4) and C2.shape == (
             3,
             4,
-        ), "Matrix M1 and M2 must be 3 rows and 4 columns [R T]"
+        ), "Matrix C1 and C2 must be 3 rows and 4 columns [R T]"
 
         N = points1.shape[0]
         P = np.zeros((N, 4, 1))  # triangulated points

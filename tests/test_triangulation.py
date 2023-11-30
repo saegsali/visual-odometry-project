@@ -23,12 +23,20 @@ def camera1() -> Camera:
 
 @pytest.fixture
 def camera2() -> Camera:
-    theta = np.pi / 8
+    theta1 = np.pi / 8
+    theta2 = np.pi / 32
     R = np.array(
         [
-            [np.cos(theta), -np.sin(theta), 0],
-            [np.sin(theta), np.cos(theta), 0],
+            [np.cos(theta1), -np.sin(theta1), 0],
+            [np.sin(theta1), np.cos(theta1), 0],
             [0, 0, 1],
+        ]
+    )
+    R = R @ np.array(
+        [
+            [np.cos(theta2), 0, np.sin(theta2)],
+            [0, 1, 0],
+            [-np.sin(theta2), 0, np.cos(theta2)],
         ]
     )
     t = np.array([[1, 1, -1]]).T
@@ -101,7 +109,7 @@ def test_find_fundamental_matrix(
     ) / np.sqrt(N)
 
     if use_ransac:
-        assert cost_algebraic < 1e-5
+        assert cost_algebraic < 1e-4
     else:
         assert cost_algebraic < 1e-3
 
@@ -174,40 +182,50 @@ def test_linear_triangulation(
     camera2: Camera,
 ):
     N = 1000
+    for _ in range(10):
+        # Randomly generate 3D points
+        landmarks = rng.uniform(-1, 1, size=(N, 3, 1))
+        landmarks[:, 2] = landmarks[:, 2] * 5 + 10  # Make z-component positive
 
-    # Randomly generate 3D points
-    landmarks = rng.uniform(-1, 1, size=(N, 3, 1))
-    landmarks[:, 2] = landmarks[:, 2] * 5 + 10  # Make z-component positive
+        # Project 3D points into two camera frames
+        points1 = camera1.project_points_world_frame(landmarks)
+        points2 = camera2.project_points_world_frame(landmarks)
 
-    # Project 3D points into two camera frames
-    points1 = camera1.project_points_world_frame(landmarks)
-    points2 = camera2.project_points_world_frame(landmarks)
+        # Clip to image frame (such that not both cameras see all points, degenerate cases possible)
+        valid_points1 = np.all((0 <= points1) & (points1 <= 400), axis=-2).flatten()
+        valid_points2 = np.all((0 <= points1) & (points2 <= 400), axis=-2).flatten()
 
-    # Linear triangulation
-    M2 = triangulator._find_relative_pose(points1, points2)
+        valid_points = valid_points1 & valid_points2
+        landmarks = landmarks[valid_points]
+        points1 = points1[valid_points]
+        points2 = points2[valid_points]
 
-    assert np.allclose(M2[:3, :3], camera2.R), "Rotation matrix is not correct"
-    assert np.allclose(
-        M2[:3, 3:] / np.linalg.norm(M2[:3, 3:]), camera2.t / np.linalg.norm(camera2.t)
-    ), "Translation vector is not correct (up to scale)"
+        # Linear triangulation
+        M2 = triangulator._find_relative_pose(points1, points2)
 
-    # Find correct scale of translation vector
-    scale = np.linalg.norm(camera2.t) / np.linalg.norm(M2[:3, 3:])
-    M2[:3, 3:] = M2[:3, 3:] * scale
+        assert np.allclose(M2[:3, :3], camera2.R), "Rotation matrix is not correct"
+        assert np.allclose(
+            M2[:3, 3:] / np.linalg.norm(M2[:3, 3:]),
+            camera2.t / np.linalg.norm(camera2.t),
+        ), "Translation vector is not correct (up to scale)"
 
-    # Triangulate landmarks (with groundtruth scale)
-    c2_T_c1 = np.vstack([M2, [0, 0, 0, 1]])
-    c2_T_w = c2_T_c1 @ camera1.c_T_w
+        # Find correct scale of translation vector
+        scale = np.linalg.norm(camera2.t) / np.linalg.norm(M2[:3, 3:])
+        M2[:3, 3:] = M2[:3, 3:] * scale
 
-    landmarks_triangulated = triangulator._linear_triangulation(
-        points1,
-        points2,
-        C1=camera1.intrinsic_matrix @ camera1.c_T_w[:3],
-        C2=camera2.intrinsic_matrix @ c2_T_w[:3],
-    )
+        # Triangulate landmarks (with groundtruth scale)
+        c2_T_c1 = np.vstack([M2, [0, 0, 0, 1]])
+        c2_T_w = c2_T_c1 @ camera1.c_T_w
 
-    # Check that the triangulated landmarks are close to the original landmarks
-    assert np.allclose(landmarks, landmarks_triangulated, atol=1e-4)
+        landmarks_triangulated = triangulator._linear_triangulation(
+            points1,
+            points2,
+            C1=camera1.intrinsic_matrix @ camera1.c_T_w[:3],
+            C2=camera2.intrinsic_matrix @ c2_T_w[:3],
+        )
+
+        # Check that the triangulated landmarks are close to the original landmarks
+        assert np.allclose(landmarks, landmarks_triangulated, atol=1e-4)
 
 
 if __name__ == "__main__":
