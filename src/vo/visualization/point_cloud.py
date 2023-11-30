@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import mpl_toolkits
 import pytransform3d.camera as pc
 import pytransform3d.transformations as pt
 import pytransform3d.plot_utils as pu
@@ -12,12 +13,22 @@ class PointCloudVisualizer:
         plt.ion()
         self.fig = plt.figure(figsize=(5, 5))
         self.ax = pu.make_3d_axis(ax_s=1, unit="m")
+        # self.ax.autoscale(enable=True, axis="both", tight=True)
+
+        self.x = np.zeros((1, 1))
+        self.y = np.zeros((1, 1))
+        self.z = np.zeros((1, 1))
+
         plt.show()
 
-    def _draw(self) -> None:
-        self.ax.relim()
-        self.ax.autoscale_view()
+    def _draw(self, percentiles=[5, 95]) -> None:
         self.ax.view_init(elev=-70, azim=-80, roll=0)
+
+        # Rescale axes
+        self.ax.set_xlim(np.percentile(self.x, percentiles))
+        self.ax.set_ylim(np.percentile(self.y, percentiles))
+        self.ax.set_zlim(np.percentile(self.z, percentiles))
+
         plt.draw()
 
     def visualize_points(self, points: np.ndarray, color="b") -> None:
@@ -31,7 +42,11 @@ class PointCloudVisualizer:
             points[:, 1].flatten(),
             points[:, 2].flatten(),
             color=color,
+            alpha=0.1,
         )
+        self.x = np.append(self.x, points[:, 0].flatten())
+        self.y = np.append(self.y, points[:, 1].flatten())
+        self.z = np.append(self.z, points[:, 2].flatten())
         self._draw()
 
     def visualize_camera(self, camera: Camera) -> None:

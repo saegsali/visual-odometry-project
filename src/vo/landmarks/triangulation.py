@@ -382,10 +382,10 @@ class LandmarksTriangulator:
         img_both = cv2.hconcat([img1, img2])
 
         cv2.imshow("Epilines", img_both)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
 
-    def visualize_triangulation(self, matches: Matches):
+    def visualize_triangulation(
+        self, matches: Matches, visualizer: PointCloudVisualizer = None
+    ):
         """Visualize the triangulated points from matches.
 
         Args:
@@ -402,16 +402,22 @@ class LandmarksTriangulator:
             intrinsic_matrix=self.camera2.intrinsic_matrix, R=M[:, :3], t=M[:, 3:]
         )
 
-        visualizer = PointCloudVisualizer()
+        if visualizer is None:
+            visualizer = PointCloudVisualizer()
         visualizer.visualize_camera(camera1)
         visualizer.visualize_camera(camera2)
         visualizer.visualize_points(points3D[inliers], color="g")
         visualizer.visualize_points(points3D[~inliers], color="r")
 
+        return visualizer
+
 
 # Example to visualze estimated fundamental matrix using epilines
 if __name__ == "__main__":
     from vo.primitives.loader import Sequence
+
+    # Create visualizer
+    visualizer = PointCloudVisualizer()
 
     # Load sequence
     sequence = Sequence("malaga", camera=1, use_lowres=True)
@@ -457,4 +463,5 @@ if __name__ == "__main__":
         frame1 = frame2
 
         # Visualize triangulation
-        triangulator.visualize_triangulation(matches)
+        triangulator.visualize_triangulation(matches, visualizer=visualizer)
+        key = cv2.waitKey(250)

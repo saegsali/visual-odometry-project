@@ -201,7 +201,7 @@ def test_linear_triangulation(
         points2 = points2[valid_points]
 
         # Linear triangulation
-        M2 = triangulator._find_relative_pose(points1, points2)
+        M2, _ = triangulator._find_relative_pose(points1, points2)
 
         assert np.allclose(M2[:3, :3], camera2.R), "Rotation matrix is not correct"
         assert np.allclose(
