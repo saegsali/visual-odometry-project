@@ -3,7 +3,9 @@ import cv2
 
 from vo.helpers import (
     to_homogeneous_coordinates,
+    to_cartesian_coordinates,
     normalize_points,
+    to_skew_symmetric_matrix,
 )
 from vo.primitives import Features, Matches
 from vo.algorithms import RANSAC
@@ -197,7 +199,7 @@ class LandmarksTriangulator:
         U, S, Vh = np.linalg.svd(E)
 
         # Translation (unit/direction vector)
-        T = U[:, 2]
+        T = U[:, 2:]
 
         # Compute possible rotations
         W = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
@@ -232,22 +234,28 @@ class LandmarksTriangulator:
             np.ndarray: inliers mask if use_ransac is set to True.
         """
         if self._use_ransac:
-            E, inliers = self._find_essential_matrix(points1, points2, use_ransac=True)
+            E, inliers = self._find_essential_matrix(points1, points2)
             points1 = points1[inliers]
             points2 = points2[inliers]
         else:
-            E = self._find_essential_matrix(points1, points2, use_ransac=False)
+            E = self._find_essential_matrix(points1, points2)
 
         # Find four possible solutions which need to be checked
-        M = self._decompose_essential_matrix(E)
+        M2 = self._decompose_essential_matrix(E)
+        M1 = np.hstack((np.eye(3), np.zeros((3, 1))))
 
         # Disambiguate relative pose by triangulating points and counting inliers
         best_valid = -1
         best_inliers = None
         best_M = None
 
-        for m in range(M.shape[0]):
-            points3D = self._linear_triangulation(points1, points2, M[m])
+        for m in range(M2.shape[0]):
+            points3D = self._linear_triangulation(
+                points1,
+                points2,
+                self.camera1.intrinsic_matrix @ M1,
+                self.camera2.intrinsic_matrix @ M2[m],
+            )
 
             # Count how many points are valid (in front of camera)
             cheirality_inliers = points3D[:, 2] >= 0
@@ -256,7 +264,7 @@ class LandmarksTriangulator:
             if n_valid > best_valid:
                 best_valid = n_valid
                 best_inliers = cheirality_inliers
-                best_M = M[m]
+                best_M = M2[m]
 
         # If RANSAC was used, return also the inliers mask
         if self._use_ransac:
@@ -264,8 +272,44 @@ class LandmarksTriangulator:
 
         return best_M
 
-    def _linear_triangulation(self, points1, points2, M):
-        pass
+    def _linear_triangulation(self, points1, points2, C1, C2):
+        """Linear Triangulation
+        Input:
+        - p1 np.ndarray(3, N): homogeneous coordinates of points in image 1
+        - p2 np.ndarray(3, N): homogeneous coordinates of points in image 2
+        - C1 np.ndarray(3, 4): camera (projection matrix) corresponding to first image, shape (3, 4)
+        - C2 np.ndarray(3, 4): camera (projection matrix) corresponding to second image, shape (3,4)
+
+        Output:
+        - P np.ndarray(4, N): homogeneous coordinates of 3-D points
+        """
+
+        assert points1.shape == points2.shape, "Input points dimension mismatch"
+        assert points1.shape[1] == 2, "Points must have two rows for (u,v)"
+        assert points1.shape[2] == 1, "Points must be a column vector"
+        assert C1.shape == (3, 4) and C2.shape == (
+            3,
+            4,
+        ), "Matrix M1 and M2 must be 3 rows and 4 columns [R T]"
+
+        N = points1.shape[0]
+        P = np.zeros((N, 4, 1))  # triangulated points
+
+        points1 = to_homogeneous_coordinates(points1)
+        points2 = to_homogeneous_coordinates(points2)
+
+        # Triangulate all points
+        for i in range(N):
+            A1 = to_skew_symmetric_matrix(points1[i]) @ C1
+            A2 = to_skew_symmetric_matrix(points2[i]) @ C2
+            A = np.r_[A1, A2]
+
+            # Solve the homogeneous system of equations
+            assert A.shape[0] >= A.shape[1], "Underdetermined system of equations"
+            _, _, Vh = np.linalg.svd(A, full_matrices=False)
+            P[i, :] = Vh.T[:, -1:]
+
+        return to_cartesian_coordinates(P)
 
     def visualize_fundamental_matrix(self, matches: Matches):
         """Visualize the computed fundamental matrix in the two frames by drawing
@@ -278,8 +322,6 @@ class LandmarksTriangulator:
         F, inliers = self._find_fundamental_matrix_ransac(
             matches.frame1.features.keypoints, matches.frame2.features.keypoints
         )
-
-        print(inliers)
 
         img1 = matches.frame1.image
         img2 = matches.frame2.image

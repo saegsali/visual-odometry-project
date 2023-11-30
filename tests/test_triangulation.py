@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import pytest
 
-from vo.helpers import to_cartesian_coordinates, to_homogeneous_coordinates
+from vo.helpers import to_homogeneous_coordinates
 from vo.landmarks.triangulation import LandmarksTriangulator
 from vo.sensors.camera import Camera
 
@@ -14,12 +14,27 @@ rng = np.random.default_rng(2023)
 # Create fixture for cameras
 @pytest.fixture
 def camera1() -> Camera:
-    return Camera(intrinsic_matrix=np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]]))
+    return Camera(
+        intrinsic_matrix=np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]]),
+        R=np.eye(3),
+        t=np.array([[0, 0, 0]]).T,
+    )
 
 
 @pytest.fixture
-def camera2(camera1) -> Camera:
-    return camera1  # use same camera intrinsics
+def camera2() -> Camera:
+    theta = np.pi / 8
+    R = np.array(
+        [
+            [np.cos(theta), -np.sin(theta), 0],
+            [np.sin(theta), np.cos(theta), 0],
+            [0, 0, 1],
+        ]
+    )
+    t = np.array([[1, 1, -1]]).T
+    return Camera(
+        intrinsic_matrix=np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]]), R=R, t=t
+    )
 
 
 # Create fixture for LandmarksTriangulator
@@ -51,35 +66,10 @@ def triangulator_opencv_ransac(camera1, camera2) -> LandmarksTriangulator:
     )
 
 
-@pytest.fixture
-def projection_camera1() -> np.ndarray:
-    R = np.eye(3)
-    t = np.array([[0, 0, 0]]).T
-    M = np.hstack((R, t))
-    K = np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]])
-    return K @ M
-
-
-@pytest.fixture
-def projection_camera2() -> np.ndarray:
-    theta = np.pi / 8
-    R = np.array(
-        [
-            [np.cos(theta), -np.sin(theta), 0],
-            [np.sin(theta), np.cos(theta), 0],
-            [0, 0, 1],
-        ]
-    )
-    t = np.array([[1, 1, -1]]).T
-    M = np.hstack((R, t))
-    K = np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]])  # same K
-    return K @ M
-
-
 def test_find_fundamental_matrix(
     triangulator: LandmarksTriangulator,
-    projection_camera1: np.ndarray,
-    projection_camera2: np.ndarray,
+    camera1: Camera,
+    camera2: Camera,
     is_normalized: bool = True,
     use_ransac: bool = False,
 ):
@@ -89,14 +79,9 @@ def test_find_fundamental_matrix(
     landmarks = rng.uniform(-1, 1, size=(N, 3, 1))
     landmarks[:, 2] = landmarks[:, 2] * 5 + 10  # Make z-component positive
 
-    landmarks_hom = to_homogeneous_coordinates(landmarks)
-
     # Project 3D points into two camera frames
-    points1 = projection_camera1.reshape(1, 3, 4) @ landmarks_hom
-    points2 = projection_camera2.reshape(1, 3, 4) @ landmarks_hom
-
-    points1 = to_cartesian_coordinates(points1)
-    points2 = to_cartesian_coordinates(points2)
+    points1 = camera1.project_points_world_frame(landmarks)
+    points2 = camera2.project_points_world_frame(landmarks)
 
     if use_ransac:
         F, inliers = triangulator._find_fundamental_matrix_ransac(points1, points2)
@@ -133,54 +118,96 @@ def test_find_fundamental_matrix(
 
 def test_find_fundamental_normalize(
     triangulator: LandmarksTriangulator,
-    projection_camera1: np.ndarray,
-    projection_camera2: np.ndarray,
+    camera1: Camera,
+    camera2: Camera,
 ):
     test_find_fundamental_matrix(
         triangulator=triangulator,
-        projection_camera1=projection_camera1,
-        projection_camera2=projection_camera2,
+        camera1=camera1,
+        camera2=camera2,
         is_normalized=False,
     )
 
 
 def test_find_fundamental_ransac(
     triangulator_ransac: LandmarksTriangulator,
-    projection_camera1: np.ndarray,
-    projection_camera2: np.ndarray,
+    camera1: Camera,
+    camera2: Camera,
 ):
     test_find_fundamental_matrix(
         triangulator=triangulator_ransac,
-        projection_camera1=projection_camera1,
-        projection_camera2=projection_camera2,
+        camera1=camera1,
+        camera2=camera2,
         use_ransac=True,
     )
 
 
 def test_find_fundamental_opencv(
     triangulator_opencv: LandmarksTriangulator,
-    projection_camera1: np.ndarray,
-    projection_camera2: np.ndarray,
+    camera1: Camera,
+    camera2: Camera,
 ):
     test_find_fundamental_matrix(
         triangulator=triangulator_opencv,
-        projection_camera1=projection_camera1,
-        projection_camera2=projection_camera2,
+        camera1=camera1,
+        camera2=camera2,
         use_ransac=False,
     )
 
 
 def test_find_fundamental_opencv_ransac(
     triangulator_opencv_ransac: LandmarksTriangulator,
-    projection_camera1: np.ndarray,
-    projection_camera2: np.ndarray,
+    camera1: Camera,
+    camera2: Camera,
 ):
     test_find_fundamental_matrix(
         triangulator=triangulator_opencv_ransac,
-        projection_camera1=projection_camera1,
-        projection_camera2=projection_camera2,
+        camera1=camera1,
+        camera2=camera2,
         use_ransac=True,
     )
+
+
+def test_linear_triangulation(
+    triangulator: LandmarksTriangulator,
+    camera1: Camera,
+    camera2: Camera,
+):
+    N = 1000
+
+    # Randomly generate 3D points
+    landmarks = rng.uniform(-1, 1, size=(N, 3, 1))
+    landmarks[:, 2] = landmarks[:, 2] * 5 + 10  # Make z-component positive
+
+    # Project 3D points into two camera frames
+    points1 = camera1.project_points_world_frame(landmarks)
+    points2 = camera2.project_points_world_frame(landmarks)
+
+    # Linear triangulation
+    M2 = triangulator._find_relative_pose(points1, points2)
+
+    assert np.allclose(M2[:3, :3], camera2.R), "Rotation matrix is not correct"
+    assert np.allclose(
+        M2[:3, 3:] / np.linalg.norm(M2[:3, 3:]), camera2.t / np.linalg.norm(camera2.t)
+    ), "Translation vector is not correct (up to scale)"
+
+    # Find correct scale of translation vector
+    scale = np.linalg.norm(camera2.t) / np.linalg.norm(M2[:3, 3:])
+    M2[:3, 3:] = M2[:3, 3:] * scale
+
+    # Triangulate landmarks (with groundtruth scale)
+    c2_T_c1 = np.vstack([M2, [0, 0, 0, 1]])
+    c2_T_w = c2_T_c1 @ camera1.c_T_w
+
+    landmarks_triangulated = triangulator._linear_triangulation(
+        points1,
+        points2,
+        C1=camera1.intrinsic_matrix @ camera1.c_T_w[:3],
+        C2=camera2.intrinsic_matrix @ c2_T_w[:3],
+    )
+
+    # Check that the triangulated landmarks are close to the original landmarks
+    assert np.allclose(landmarks, landmarks_triangulated, atol=1e-4)
 
 
 if __name__ == "__main__":

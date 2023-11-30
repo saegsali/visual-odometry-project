@@ -1,6 +1,6 @@
-from typing import Tuple
 import numpy as np
-import cv2
+
+from vo.helpers import to_cartesian_coordinates
 
 
 class Camera:
@@ -10,7 +10,11 @@ class Camera:
     """
 
     def __init__(
-        self, intrinsic_matrix: np.ndarray, distortion_coeffs: np.ndarray = None
+        self,
+        intrinsic_matrix: np.ndarray,
+        distortion_coeffs: np.ndarray = None,
+        R: np.ndarray = None,
+        t: np.ndarray = None,
     ):
         """
         Initialize the Camera class with intrinsic parameters.
@@ -20,6 +24,25 @@ class Camera:
         """
         self.intrinsic_matrix = intrinsic_matrix
         self.distortion_coeffs = distortion_coeffs
+        self.R = R
+        self.t = t
+
+    @property
+    def projection_matrix(self) -> np.ndarray:
+        """
+        :return: The focal length in the x direction.
+        """
+        assert self.R is not None and self.t is not None, "Camera pose not set"
+        return self.intrinsic_matrix[0, 0] @ np.hstack((self.R, self.t))
+
+    def distort_points(self, points: np.ndarray) -> np.ndarray:
+        """
+        Distort points using the camera's distortion coefficients.
+
+        :param points: An array of points.
+        :return: The distorted points.
+        """
+        pass
 
     def undistort(self, image: np.ndarray) -> np.ndarray:
         """
@@ -30,23 +53,34 @@ class Camera:
         """
         pass
 
-    def project_points(self, points_3d: np.ndarray) -> np.ndarray:
+    def project_points_world_frame(self, points_3d: np.ndarray) -> np.ndarray:
         """
-        Project 3D points into the camera's 2D image plane.
+        Project 3D points expressed in the world's frame into the camera's 2D image plane.
 
-        :param points_3d: An array of 3D points.
+        :param points_3d: An array of 3D points in world frame coordinates.
         :return: An array of 2D points.
         """
-        pass
+        assert self.R is not None and self.t is not None, "Camera pose not set"
+        points_camera_frame = self.R[np.newaxis] @ points_3d + self.t
+        return self.project_points_camera_frame(points_camera_frame)
 
-    def estimate_pose(
-        self, image_points: np.ndarray, world_points: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def project_points_camera_frame(
+        self,
+        points_3d: np.ndarray,
+    ) -> np.ndarray:
         """
-        Estimate the camera pose given corresponding 2D image points and 3D world points.
+        Project 3D points expressed in the camera's frame into the camera's 2D image plane.
 
-        :param image_points: 2D points in the image plane.
-        :param world_points: Corresponding 3D points in the world.
-        :return: A tuple containing the rotation vector and translation vector.
+        :param points_3d: An array of 3D points in camera frame coordinates.
+        :return: An array of 2D points.
         """
-        pass
+        projections_hom = self.intrinsic_matrix[np.newaxis] @ points_3d
+        return to_cartesian_coordinates(projections_hom)
+
+    @property
+    def c_T_w(self) -> np.ndarray:
+        """
+        :return: The transformation matrix from world to camera coordinates.
+        """
+        assert self.R is not None and self.t is not None, "Camera pose not set"
+        return np.vstack((np.hstack((self.R, self.t)), [0, 0, 0, 1]))

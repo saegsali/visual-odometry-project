@@ -1,9 +1,11 @@
 import numpy as np
 import pytest
+
 from vo.helpers import (
-    to_homogeneous_coordinates,
-    to_cartesian_coordinates,
     normalize_points,
+    to_cartesian_coordinates,
+    to_homogeneous_coordinates,
+    to_skew_symmetric_matrix,
 )
 
 # Set random seed generator
@@ -89,5 +91,19 @@ def test_normalize_points_complex():
     )
 
 
+def test_to_skew_symmetric_matrix():
+    vector = np.array([[1, 2, 3]]).T
+    expected_output = np.array([[0, -3, 2], [3, 0, -1], [-2, 1, 0]])
+
+    assert np.array_equal(to_skew_symmetric_matrix(vector), expected_output)
+
+    vector_batch = np.array([[[1, 2, 3]], [[4, 5, 6]]]).reshape(2, 3, 1)
+    expected_output_batch = np.array(
+        [[[0, -3, 2], [3, 0, -1], [-2, 1, 0]], [[0, -6, 5], [6, 0, -4], [-5, 4, 0]]]
+    )
+
+    assert np.array_equal(to_skew_symmetric_matrix(vector_batch), expected_output_batch)
+
+
 if __name__ == "__main__":
-    pytest.main("-v")
+    pytest.main(["-v"])
