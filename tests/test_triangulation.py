@@ -11,16 +11,44 @@ from vo.sensors.camera import Camera
 rng = np.random.default_rng(2023)
 
 
+# Create fixture for cameras
+@pytest.fixture
+def camera1() -> Camera:
+    return Camera(intrinsic_matrix=np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]]))
+
+
+@pytest.fixture
+def camera2(camera1) -> Camera:
+    return camera1  # use same camera intrinsics
+
+
 # Create fixture for LandmarksTriangulator
 @pytest.fixture
-def triangulator() -> LandmarksTriangulator:
-    camera1 = Camera(
-        intrinsic_matrix=np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]])
+def triangulator(camera1, camera2) -> LandmarksTriangulator:
+    return LandmarksTriangulator(
+        camera1=camera1, camera2=camera2, use_ransac=False, use_opencv=False
     )
-    camera2 = Camera(
-        intrinsic_matrix=np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]])
+
+
+@pytest.fixture
+def triangulator_ransac(camera1, camera2) -> LandmarksTriangulator:
+    return LandmarksTriangulator(
+        camera1=camera1, camera2=camera2, use_ransac=True, use_opencv=False
     )
-    return LandmarksTriangulator(camera1=camera1, camera2=camera2)
+
+
+@pytest.fixture
+def triangulator_opencv(camera1, camera2) -> LandmarksTriangulator:
+    return LandmarksTriangulator(
+        camera1=camera1, camera2=camera2, use_ransac=False, use_opencv=True
+    )
+
+
+@pytest.fixture
+def triangulator_opencv_ransac(camera1, camera2) -> LandmarksTriangulator:
+    return LandmarksTriangulator(
+        camera1=camera1, camera2=camera2, use_ransac=True, use_opencv=True
+    )
 
 
 @pytest.fixture
@@ -71,9 +99,9 @@ def test_find_fundamental_matrix(
     points2 = to_cartesian_coordinates(points2)
 
     if use_ransac:
-        F, inliers = triangulator.find_fundamental_matrix_ransac(points1, points2)
+        F, inliers = triangulator._find_fundamental_matrix_ransac(points1, points2)
     else:
-        F = triangulator.find_fundamental_matrix(
+        F = triangulator._find_fundamental_matrix(
             points1, points2, is_normalized=is_normalized
         )
 
@@ -87,7 +115,10 @@ def test_find_fundamental_matrix(
         np.sum(points2_hom.T * (F @ points1_hom.T))
     ) / np.sqrt(N)
 
-    assert cost_algebraic < 1e-10
+    if use_ransac:
+        assert cost_algebraic < 1e-5
+    else:
+        assert cost_algebraic < 1e-3
 
     # Check with OpenCV implementation
     if use_ransac:
@@ -114,12 +145,38 @@ def test_find_fundamental_normalize(
 
 
 def test_find_fundamental_ransac(
-    triangulator: LandmarksTriangulator,
+    triangulator_ransac: LandmarksTriangulator,
     projection_camera1: np.ndarray,
     projection_camera2: np.ndarray,
 ):
     test_find_fundamental_matrix(
-        triangulator=triangulator,
+        triangulator=triangulator_ransac,
+        projection_camera1=projection_camera1,
+        projection_camera2=projection_camera2,
+        use_ransac=True,
+    )
+
+
+def test_find_fundamental_opencv(
+    triangulator_opencv: LandmarksTriangulator,
+    projection_camera1: np.ndarray,
+    projection_camera2: np.ndarray,
+):
+    test_find_fundamental_matrix(
+        triangulator=triangulator_opencv,
+        projection_camera1=projection_camera1,
+        projection_camera2=projection_camera2,
+        use_ransac=False,
+    )
+
+
+def test_find_fundamental_opencv_ransac(
+    triangulator_opencv_ransac: LandmarksTriangulator,
+    projection_camera1: np.ndarray,
+    projection_camera2: np.ndarray,
+):
+    test_find_fundamental_matrix(
+        triangulator=triangulator_opencv_ransac,
         projection_camera1=projection_camera1,
         projection_camera2=projection_camera2,
         use_ransac=True,

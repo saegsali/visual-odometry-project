@@ -51,7 +51,6 @@ def test_ransac_find_best_model(data):
     inlier_threshold = max_noise + 1e-5
     outlier_ratio = 1 / 3
     confidence = 0.99
-    max_iterations = 100
 
     ransac = RANSAC(
         3,
