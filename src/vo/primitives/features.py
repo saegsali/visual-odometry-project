@@ -7,6 +7,7 @@ class Features:
         keypoints: np.ndarray,
         descriptors: np.ndarray = None,
         landmarks: np.ndarray = None,
+        inliers: np.ndarray = None,
     ) -> None:
         """Initializes a features object.
 

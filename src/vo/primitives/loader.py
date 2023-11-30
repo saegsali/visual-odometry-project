@@ -37,7 +37,7 @@ class Sequence:
         self.increment = increment
         self.rectified = rectified
         self.use_lowres = use_lowres
-        self.images = self.__load()
+        self.images = self._load()
 
     def get_data_dir(self):
         directory = os.path.dirname(os.path.realpath(__file__))
@@ -45,7 +45,7 @@ class Sequence:
         directory = directory.split(self.project_name)[0]
         return os.path.join(directory, self.project_name, self._rel_data_path)
 
-    def __load(self):
+    def _load(self):
         """Load images from a directory.
 
         Returns:
@@ -53,16 +53,16 @@ class Sequence:
         """
         match self.dataset:
             case "kitti":
-                images = self.__load_kitti()
+                images = self._load_kitti()
             case "malaga":
-                images = self.__load_malaga()
+                images = self._load_malaga()
             case "parking":
-                images = self.__load_parking()
+                images = self._load_parking()
             case _:
                 raise Exception("Invalid dataset")
         return images
 
-    def __load_kitti(self):
+    def _load_kitti(self):
         """Load images from the KITTI dataset.
 
         Returns:
@@ -87,7 +87,7 @@ class Sequence:
 
         return image_paths
 
-    def __load_malaga(self):
+    def _load_malaga(self):
         """Load images from the Malaga dataset.
 
         Returns:
@@ -105,7 +105,7 @@ class Sequence:
         print("Loading {} images from {}".format(len(image_paths), data_path))
 
         # load intrinsics
-        if self.rectified == False:
+        if not self.rectified:
             config_file = "camera_params_raw_1024x768.txt"
             match self.camera:
                 case 0:
@@ -150,7 +150,7 @@ class Sequence:
 
         return image_paths
 
-    def __load_parking(self):
+    def _load_parking(self):
         """Load images from the Parking dataset.
 
         Returns:
