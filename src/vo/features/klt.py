@@ -4,6 +4,7 @@ import cv2
 import sys
 
 from vo.primitives import Sequence, Frame, Features
+from vo.visualization.overlays import display_fps
 
 
 class KLTTracker:
@@ -74,7 +75,7 @@ class KLTTracker:
         """Converts the image to a grayscale image."""
         return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    def find_corners(self, frame, mask=None) -> np.ndarray:
+    def find_corners(self, frame: Frame, mask=None) -> np.ndarray:
         # Ensure the input image is grayscale
         img = frame.image
         if len(img.shape) == 3:
@@ -83,7 +84,7 @@ class KLTTracker:
         self._num_features = features.shape[0]
         return features
 
-    def track_features(self, frame) -> Frame:
+    def track_features(self, frame: Frame) -> Frame:
         """Track features in the current frame using the KLT algorithm. Freatures are updated if there are not enough inliers.
 
         Args:
@@ -226,22 +227,28 @@ if __name__ == "__main__":
     # Initialize the tracker with the first frame
     klt_tracker = KLTTracker(frame=frame)
 
+    # Variables for calculating FPS
+    start_time = time.time()
+    frame_count = 0
+
     for i in range(1, len(video)):
         frame = next(video)
 
-        # calculate optical flow
+        # Calculate optical flow
         frame = klt_tracker.track_features(frame)
 
         # Draw the tracks on the image
         image, mask = klt_tracker.draw_tracks()
 
+        # Overlay the FPS on the image
+        image = display_fps(image=image, start_time=start_time, frame_count=frame_count)
+
         # Display the resulting frame
         cv2.imshow("Press esc to stop", image)
+        frame_count += 1
+
         k = cv2.waitKey(30) & 0xFF
         if k == 27:
             break
-
-        # Add a delay to slow down the video
-        # time.sleep(0.5)
 
     cv2.destroyAllWindows()
