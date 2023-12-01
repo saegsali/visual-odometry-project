@@ -98,3 +98,5 @@ class Features:
             self._descriptors = self._descriptors[self._inliers]
         if self._landmarks is not None:
             self._landmarks = self._landmarks[self._inliers]
+
+        self._inliers = np.ones(shape=(self.length)).astype(bool)
