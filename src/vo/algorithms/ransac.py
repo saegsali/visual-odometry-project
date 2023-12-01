@@ -20,9 +20,10 @@ class RANSAC:
         model_fn: Callable,
         error_fn: Callable,
         inlier_threshold: float,
-        outlier_ratio: float = 0.5,
+        outlier_ratio: float = 0.9,
         confidence: float = 0.99,
         max_iterations: int = np.inf,
+        adaptive: bool = True,
     ) -> None:
         """Initializes a RANSAC estimator for a provided model and error function.
 
@@ -32,9 +33,10 @@ class RANSAC:
             model_fn (function): Function which takes as input the sampled points and estimates the mdoel.
             error_fn (function): Function which computes the error terms for all points.
             inlier_threshold (float): The threshold for error term to be considered an inlier.
-            outlier_ratio (float, optional): Percentage of estimated outlier points. Defaults to 0.5.
+            outlier_ratio (float, optional): Percentage of estimated outlier points, serves as upper bound for adaptive case. Defaults to 0.9.
             confidence (float, optional): Confidence level that all inliers are selected. Defaults to 0.99.
             max_iterations (int, optional): Max iterations algorithm should perform before stopping. Defaults to np.inf.
+            adaptive (bool, optional): Whether to use adaptive RANSAC by adjusting the number of iterations required using estimation of the outlier ratio. Defaults to True.
         """
         self.s = s_points
         self.population = np.array(population)
@@ -43,10 +45,12 @@ class RANSAC:
         self.inlier_threshold = inlier_threshold
         self.outlier_ratio = outlier_ratio
         self.confidence = confidence
+        self.adaptive = adaptive
 
         self.rng = np.random.default_rng(2023)
 
         # Store number of iterations to perform
+        self.max_iterations = max_iterations
         self.n_iterations = min(max_iterations, self.compute_n_iterations())
 
     def compute_n_iterations(self) -> int:
@@ -69,8 +73,9 @@ class RANSAC:
         """
         best_n_inliers = -1
         best_inliers = None
+        n = 0
 
-        for _ in range(self.n_iterations):
+        while n < self.n_iterations:
             # Sample s points
             idxs = self.rng.choice(
                 np.arange(len(self.population)), replace=False, size=self.s
@@ -88,6 +93,16 @@ class RANSAC:
             if n_inliers > best_n_inliers:
                 best_n_inliers = n_inliers
                 best_inliers = inliers
+
+                # Adjust number of iterations if adaptive
+                if self.adaptive:
+                    self.outlier_ratio = 1 - best_n_inliers / len(self.population)
+                    self.outlier_ratio = min(
+                        max(self.outlier_ratio, 0.01), 0.99
+                    )  # for numerical safety
+                    num_iterations = self.compute_n_iterations()
+                    self.n_iterations = int(min(self.max_iterations, num_iterations))
+            n += 1
 
         # Recompute best model using all inliers
         all_inlier_points = self.population[best_inliers]
@@ -123,7 +138,7 @@ if __name__ == "__main__":
         error_fn,
         inlier_threshold,
         outlier_ratio,
-        confidence,
+        confidence=confidence,
     )
 
     best_model, best_inliers = ransac.find_best_model()

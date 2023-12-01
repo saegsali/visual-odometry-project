@@ -19,7 +19,7 @@ class LandmarksTriangulator:
         camera1: Camera,
         camera2: Camera,
         use_ransac: bool = True,
-        outlier_ratio: float = 0.5,
+        outlier_ratio: float = 0.9,
         ransac_threshold: float = 3.0,
         ransac_confidence=0.99,
         use_opencv: bool = True,
