@@ -21,7 +21,11 @@ class Features:
         self._descriptors = descriptors
         self._landmarks = landmarks
 
-        self._inliers = np.ones(shape=(self.length)).astype(bool)
+        self._inliers = (
+            np.ones(shape=(self.length)).astype(bool)
+            if inliers is None
+            else inliers.astype(bool)
+        )
 
     @property
     def keypoints(self) -> np.ndarray:
