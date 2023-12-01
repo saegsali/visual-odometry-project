@@ -7,6 +7,7 @@ class Features:
         keypoints: np.ndarray,
         descriptors: np.ndarray = None,
         landmarks: np.ndarray = None,
+        uids: np.ndarray = None,
         inliers: np.ndarray = None,
     ) -> None:
         """Initializes a features object.
@@ -21,6 +22,7 @@ class Features:
         self._descriptors = descriptors
         self._landmarks = landmarks
 
+        self._uids = uids
         self._inliers = (
             np.ones(shape=(self.length)).astype(bool)
             if inliers is None
@@ -42,6 +44,10 @@ class Features:
     @property
     def inliers(self) -> np.ndarray:
         return self._inliers
+
+    @property
+    def uids(self) -> np.ndarray:
+        return self._uids
 
     @descriptors.setter
     def descriptors(self, descriptors: np.ndarray) -> None:
@@ -70,6 +76,13 @@ class Features:
             inliers.shape[0] == self._keypoints.shape[0]
         ), "Unequal number of inliers and keypoints."
         self._inliers = inliers.astype(bool)
+
+    @uids.setter
+    def uids(self, uids: np.ndarray) -> None:
+        assert (
+            uids.shape[0] == self._keypoints.shape[0]
+        ), "Unequal number of uids and keypoints."
+        self._uids = uids
 
     @property
     def length(self) -> int:
