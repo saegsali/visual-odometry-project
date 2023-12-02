@@ -5,6 +5,7 @@ import configparser
 import numpy as np
 
 from vo.primitives import Frame
+from vo.sensors import Camera
 
 
 class Sequence:
@@ -35,9 +36,10 @@ class Sequence:
         self.intrinsics = None
         self.idx = 0
         self.increment = increment
-        self.rectified = rectified
-        self.use_lowres = use_lowres
+        self._rectified = rectified
+        self._use_lowres = use_lowres
         self.images = self._load()
+        self.sensor = Camera(intrinsic_matrix=self.intrinsics)
 
     def get_data_dir(self):
         directory = os.path.dirname(os.path.realpath(__file__))
@@ -105,7 +107,7 @@ class Sequence:
         print("Loading {} images from {}".format(len(image_paths), data_path))
 
         # load intrinsics
-        if not self.rectified:
+        if not self._rectified:
             config_file = "camera_params_raw_1024x768.txt"
             match self.camera:
                 case 0:
@@ -113,7 +115,7 @@ class Sequence:
                 case 1:
                     camera = "CAMERA_PARAMS_RIGHT"
         else:  # rectified
-            if self.use_lowres:
+            if self._use_lowres:
                 config_file = "camera_params_rectified_a=0_800x600.txt"
             else:
                 config_file = "camera_params_rectified_a=0_1024x768.txt"
@@ -196,6 +198,14 @@ class Sequence:
             np.ndarray: The intrinsics matrix. (3x3)
         """
         return self.intrinsics
+
+    def get_camera(self) -> Camera:
+        """Return the camera object.
+
+        Returns:
+            Camera: The camera object.
+        """
+        return self.sensor
 
     def __len__(self) -> int:
         return len(self.images)
