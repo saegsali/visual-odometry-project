@@ -20,7 +20,7 @@ class KLTTracker:
     """
 
     # params for (ShiTomasi) corner detection
-    _feature_params = dict(maxCorners=400, qualityLevel=0.3, minDistance=7, blockSize=7)
+    _feature_params = dict(maxCorners=500, qualityLevel=0.3, minDistance=7, blockSize=7)
 
     # Parameters for Lucas Kanade optical flow
     _lk_params = dict(
@@ -229,7 +229,6 @@ if __name__ == "__main__":
 
     # Variables for calculating FPS
     start_time = time.time()
-    frame_count = 0
 
     for i in range(1, len(video)):
         frame = next(video)
@@ -241,13 +240,12 @@ if __name__ == "__main__":
         image, mask = klt_tracker.draw_tracks()
 
         # Overlay the FPS on the image
-        image = display_fps(image=image, start_time=start_time, frame_count=frame_count)
+        image = display_fps(image=image, start_time=start_time, frame_count=i)
 
         # Display the resulting frame
         cv2.imshow("Press esc to stop", image)
-        frame_count += 1
 
-        k = cv2.waitKey(30) & 0xFF
+        k = cv2.waitKey(30) & 0xFF  # 30ms delay -> try lower value for more FPS :)
         if k == 27:
             break
 
