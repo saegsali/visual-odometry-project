@@ -42,9 +42,14 @@ class Sequence:
         self.sensor = Camera(intrinsic_matrix=self.intrinsics)
 
     def get_data_dir(self):
-        directory = os.path.dirname(os.path.realpath(__file__))
+        path = os.path.dirname(os.path.realpath(__file__))
         # clip everything after viual_odometry
-        directory = directory.split(self.project_name)[0]
+        root_dir = path.split(self.project_name)
+        directory = root_dir[0]
+        if (
+            len(root_dir) > 2
+        ):  # if the project name is in the path twice. Happens in GitHub actions
+            directory = os.path.join(directory, self.project_name)
         return os.path.join(directory, self.project_name, self._rel_data_path)
 
     def _load(self):
