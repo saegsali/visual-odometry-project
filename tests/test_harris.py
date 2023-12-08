@@ -133,7 +133,7 @@ def sample_frames2():
     # frame2 = Frame(image=img2)
 
     # Load sequence
-    sequence = Sequence("kitti", path="tests/test_data")
+    sequence = Sequence("kitti", path="./tests/test_data")
     frame1 = sequence.get_frame(0)
     frame2 = sequence.get_frame(1)
 
