@@ -24,6 +24,7 @@ class RANSAC:
         confidence: float = 0.99,
         max_iterations: int = np.inf,
         adaptive: bool = True,
+        p3p: bool = False,
     ) -> None:
         """Initializes a RANSAC estimator for a provided model and error function.
 
@@ -46,6 +47,7 @@ class RANSAC:
         self.outlier_ratio = outlier_ratio
         self.confidence = confidence
         self.adaptive = adaptive
+        self.p3p = p3p
 
         self.rng = np.random.default_rng(2023)
 
@@ -64,8 +66,13 @@ class RANSAC:
         )
         return int(k)
 
-    def find_best_model(self) -> tuple[object, np.ndarray]:
+    def find_best_model(
+        self, population: np.ndarray | list | tuple = None
+    ) -> tuple[object, np.ndarray]:
         """Finds the best model using RANSAC.
+
+        Args:
+            population (np.ndarray | list | tuple, optional): The population of points to sample from for model estimation, indexed in first dimension. Defaults to None.
 
         Returns:
             object: The best model parameters or object.
@@ -73,7 +80,12 @@ class RANSAC:
         """
         best_n_inliers = -1
         best_inliers = None
+        best_model = None
         n = 0
+
+        if population is not None:
+            self.population = np.array(population)
+        assert self.population is not None, "Population must be provided"
 
         while n < self.n_iterations:
             # Sample s points
@@ -84,6 +96,9 @@ class RANSAC:
 
             # Compute model from sampled points
             model = self.model_fn(points)
+            # Skip if model did not find a solution
+            if model is None:
+                continue
 
             # Compute inliers
             errors = self.error_fn(model, self.population)
@@ -93,6 +108,7 @@ class RANSAC:
             if n_inliers > best_n_inliers:
                 best_n_inliers = n_inliers
                 best_inliers = inliers
+                best_model = model
 
                 # Adjust number of iterations if adaptive
                 if self.adaptive:
@@ -105,8 +121,10 @@ class RANSAC:
             n += 1
 
         # Recompute best model using all inliers
-        all_inlier_points = self.population[best_inliers]
-        best_model = self.model_fn(all_inlier_points)
+        # Just take the best guess for P3P instead of recomputing the model
+        if not self.p3p:
+            all_inlier_points = self.population[best_inliers]
+            best_model = self.model_fn(all_inlier_points)
 
         return best_model, best_inliers
 

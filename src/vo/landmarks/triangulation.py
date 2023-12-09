@@ -51,8 +51,10 @@ class LandmarksTriangulator:
 
         # Find relative pose
         if self._use_ransac:
-            M, landmarks, inliers = self._find_relative_pose(points1, points2)
-            return M, landmarks, inliers
+            M, landmarks, best_inliers, inliers = self._find_relative_pose(
+                points1, points2
+            )
+            return M, landmarks, best_inliers, inliers
         else:
             M, landmarks = self._find_relative_pose(points1, points2)
             return M, landmarks
@@ -283,7 +285,7 @@ class LandmarksTriangulator:
 
         # If RANSAC was used, return also the inliers mask
         if self._use_ransac:
-            return best_M, best_triangulated_points, best_inliers
+            return best_M, best_triangulated_points, best_inliers, inliers
 
         return best_M, best_triangulated_points
 
@@ -391,7 +393,7 @@ class LandmarksTriangulator:
         Args:
             matches (Matches): A matches containing the two frames to visualized.
         """
-        M, points3D, inliers = self.triangulate_matches(matches)
+        M, points3D, inliers, _ = self.triangulate_matches(matches)
 
         camera1 = Camera(
             intrinsic_matrix=self.camera1.intrinsic_matrix,
