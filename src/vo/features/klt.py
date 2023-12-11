@@ -5,6 +5,7 @@ import sys
 
 from vo.primitives import Sequence, Frame, Features
 from vo.visualization.overlays import display_fps
+from vo.primitives import Matches
 
 
 class KLTTracker:
@@ -84,14 +85,14 @@ class KLTTracker:
         self._num_features = features.shape[0]
         return features
 
-    def track_features(self, frame: Frame) -> Frame:
+    def track_features(self, frame: Frame) -> Matches:
         """Track features in the current frame using the KLT algorithm. Freatures are updated if there are not enough inliers.
 
         Args:
             frame (Frame): The current frame.
 
         Returns:
-            Frame: The current frame with updated features.
+            matches (Matches): object containing the matching freature points of the input frame and the one before.
         """
 
         # Update the frame
@@ -128,6 +129,15 @@ class KLTTracker:
         self.frame.features = Features(keypoints=next_pts, uids=uids)
         self._old_frame.features = Features(keypoints=prev_pts[filter], uids=uids)
 
+        # Create numpy array indicating the matching keypoint of the other frame (here same index correspond to same keypoint)
+        matches_index = np.arange(0, self.frame.features.keypoints.shape[0])
+        matches_pairs = np.hstack(
+            (matches_index.reshape(-1, 1), matches_index.reshape(-1, 1))
+        )
+
+        # Create Matches object with the current and the old frame
+        self._matches = Matches(self._old_frame, self.frame, matches_pairs)
+
         # Update template features if there are not enough inliers in the current frame
         if (
             np.count_nonzero(filter) < self._min_inliers
@@ -161,7 +171,9 @@ class KLTTracker:
             "Number of features:",
             len(self.frame.features.keypoints[self.frame.features.inliers]),
         )
-        return self.frame
+
+        # return self.frame
+        return self._matches
 
     def draw_tracks(self) -> np.ndarray:
         """Draw the tracks of the last 5 frames on the image.
@@ -234,7 +246,7 @@ if __name__ == "__main__":
         frame = next(video)
 
         # Calculate optical flow
-        frame = klt_tracker.track_features(frame)
+        matches = klt_tracker.track_features(frame)
 
         # Draw the tracks on the image
         image, mask = klt_tracker.draw_tracks()
