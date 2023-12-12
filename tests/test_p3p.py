@@ -40,15 +40,19 @@ def camera2() -> Camera:
     )
     t = np.array([[1, 1, -1]]).T
     return Camera(
-        intrinsic_matrix=np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]]), R=R, t=t
+        intrinsic_matrix=np.array(
+            [[500, 0, 320], [0, 500, 240], [0, 0, 1]], dtype=float
+        ),
+        R=R,
+        t=t,
     )
 
 
 # Create fixture for P3PPoseEstimator
 @pytest.fixture
-def pose_estimator(camera1) -> P3PPoseEstimator:
+def pose_estimator(camera2) -> P3PPoseEstimator:
     return P3PPoseEstimator(
-        intrinsic_matrix=camera1.intrinsic_matrix,
+        intrinsic_matrix=camera2.intrinsic_matrix,
         inlier_threshold=1,
         outlier_ratio=0.9,
         confidence=0.99,
@@ -84,20 +88,28 @@ def test_estimate_pose(
     assert rmatrix.shape == (3, 3), "Rotation matrix must be 3x3"
     assert tvec.shape == (3, 1), "Translation vector must be 3x1"
 
-    # Estimate pose with opencv
+    # Check if rotation matrix and translation vector are close to the ground truth
+    assert np.allclose(
+        rmatrix, camera2.R, atol=1e-3
+    ), f"Rotation matrix {rmatrix} is incorrect"
+    assert np.allclose(
+        tvec, camera2.t, atol=1e-3
+    ), f"Translation vector {tvec} is incorrect"
+
+    # Estimate pose with opencv, not really necessary but nice to know it leads to the same result
     success, rvec_cv, tvec_cv, inliers_cv = cv2.solvePnPRansac(
-        landmarks, points2, camera1.intrinsic_matrix, None, flags=cv2.SOLVEPNP_P3P
+        landmarks, points2, camera2.intrinsic_matrix, None, flags=cv2.SOLVEPNP_P3P
     )
     assert success, "OpenCV P3P failed"
     rmatrix_cv = cv2.Rodrigues(rvec_cv)[0]
 
-    # Check if rotation matrix and translation vector are correct
+    # Check if rotation matrix and translation vector are close
     assert np.allclose(
         rmatrix, rmatrix_cv, atol=1e-3
-    ), f"Rotation matrix {rmatrix - rmatrix_cv} is incorrect"
+    ), f"Rotation matrices are not close: rmatrix - rmatrix_cv = {rmatrix - rmatrix_cv}"
     assert np.allclose(
         tvec, tvec_cv, atol=1e-3
-    ), f"Translation vector {tvec - tvec_cv} is incorrect"
+    ), f"Translation vectors are not close: tvec - tvec_cv = {tvec - tvec_cv}"
 
 
 if __name__ == "__main__":
