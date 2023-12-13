@@ -42,6 +42,15 @@ class Matches:
             sensor=frame.sensor,
         )
 
+    def apply_inliers(self, inliers: np.ndarray) -> None:
+        """Apply inliers to the matches.
+
+        Args:
+            inliers (np.ndarray): Boolean array of inliers.
+        """
+        self.frame1.features.apply_inliers(inliers)
+        self.frame2.features.apply_inliers(inliers)
+
     def plot_matches(self):
         """Plot the the images with the matching keypoints"""
         # Todo
