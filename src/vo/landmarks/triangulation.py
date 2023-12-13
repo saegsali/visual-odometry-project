@@ -35,6 +35,51 @@ class LandmarksTriangulator:
 
         self._use_opencv = use_opencv
 
+    def triangulate_matches_with_relative_pose(
+        self, matches: Matches, T: np.ndarray
+    ) -> np.ndarray:
+        """Triangulate the 3D position of landmarks using matches from two frames as well as the relative pose between them.
+
+        Args:
+            matches (Matches): object containing the matches of each frame.
+            T (np.ndarray): 4x4 matrix which transforms coordinates from camera frame 1 to camera frame 2.
+
+        Returns:
+            np.ndarray: array of 3D landmark positions in coordinates of frame 1, shape = (N, 3, 1).
+        """
+        points1 = to_homogeneous_coordinates(matches.frame1.features.keypoints)
+        points2 = to_homogeneous_coordinates(matches.frame2.features.keypoints)
+
+        # Construct linear equations
+        # l1 * p1 = K1 @ P
+        # l2 * p2 = K2 @ T @ P = K2 @ (R @ P + t)
+
+        # Construct matrix A
+        R_inv = np.linalg.inv(T[:3, :3])
+        K1_inv = np.linalg.inv(self.camera1.intrinsic_matrix)
+        K2_inv = np.linalg.inv(self.camera2.intrinsic_matrix)
+
+        A1 = K1_inv @ points1
+        A2 = R_inv @ K2_inv @ points2
+        A = np.concatenate(
+            [
+                A1,
+                -A2,
+            ],
+            axis=-1,
+        )
+        b = -R_inv @ T[:3, 3:]
+
+        # Solve overconstrained system
+        lambdas = np.linalg.solve(
+            np.matmul(A.transpose(0, 2, 1), A), (A.transpose(0, 2, 1) @ b)
+        )
+        l0 = lambdas[:, 0].reshape(-1, 1, 1)
+
+        # Recover P
+        P = l0 * A1
+        return P
+
     def triangulate_matches(self, matches: Matches) -> np.ndarray:
         """Triangulate the 3D position of landmarks using matches from two frames,
         and as a byproduct, estimate the relative pose between frame 1 and frame 2.

@@ -5,6 +5,7 @@ import pytest
 from vo.helpers import to_homogeneous_coordinates
 from vo.landmarks.triangulation import LandmarksTriangulator
 from vo.sensors.camera import Camera
+from vo.primitives import Matches, Frame, Features
 
 # Test case highly inspired from Exercise 6 "run_test_eight_point.py"
 
@@ -222,6 +223,46 @@ def test_linear_triangulation(
             points2,
             C1=camera1.intrinsic_matrix @ camera1.c_T_w[:3],
             C2=camera2.intrinsic_matrix @ c2_T_w[:3],
+        )
+
+        # Check that the triangulated landmarks are close to the original landmarks
+        assert np.allclose(landmarks, landmarks_triangulated, atol=1e-4)
+
+
+def test_triangulate_matches(
+    triangulator: LandmarksTriangulator,
+    camera1: Camera,
+    camera2: Camera,
+):
+    N = 1000
+    for _ in range(10):
+        # Randomly generate 3D points
+        landmarks = rng.uniform(-1, 1, size=(N, 3, 1))
+        landmarks[:, 2] = landmarks[:, 2] * 5 + 10  # Make z-component positive
+
+        # Project 3D points into two camera frames
+        points1 = camera1.project_points_world_frame(landmarks)
+        points2 = camera2.project_points_world_frame(landmarks)
+
+        # Clip to image frame (such that not both cameras see all points, degenerate cases possible)
+        valid_points1 = np.all((0 <= points1) & (points1 <= 400), axis=-2).flatten()
+        valid_points2 = np.all((0 <= points1) & (points2 <= 400), axis=-2).flatten()
+
+        valid_points = valid_points1 & valid_points2
+        landmarks = landmarks[valid_points]
+        points1 = points1[valid_points]
+        points2 = points2[valid_points]
+
+        # Triangulate landmarks with known relative pose
+        matches = Matches(
+            Frame(None, features=Features(keypoints=points1)),
+            Frame(None, features=Features(keypoints=points2)),
+            matches=np.stack([np.arange(len(points1))] * 2, axis=-1),
+        )
+
+        T_21 = camera2.c_T_w @ np.linalg.inv(camera1.c_T_w)
+        landmarks_triangulated = triangulator.triangulate_matches_with_relative_pose(
+            matches, T_21
         )
 
         # Check that the triangulated landmarks are close to the original landmarks
