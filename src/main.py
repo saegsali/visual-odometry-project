@@ -47,11 +47,12 @@ def main():
     current_pose[:3, :3] = np.eye(3)
 
     trajectory = []
+    camera = sequence.get_camera()
 
     for frame2 in tqdm(sequence):
         if frame2.get_frame_id() < 80:
             continue
-        camera = sequence.get_camera()
+
         triangulator = LandmarksTriangulator(
             camera1=camera, camera2=camera, use_opencv=True
         )
@@ -131,7 +132,7 @@ def main():
         if frame2.get_frame_id() < 2:
             continue
 
-        M, landmarks, best_inliers, inliers = triangulator.triangulate_matches(matches)
+        M, landmarks, inliers = triangulator.triangulate_matches(matches)
 
         # landmarks to homogeneous coordinates form (N, 3, 1) to (N, 4, 1)
         landmarks = np.concatenate(
@@ -144,9 +145,8 @@ def main():
         # back to non-homogeneous coordinates
         landmarks = landmarks[:, :3, :] / np.expand_dims(landmarks[:, 3, :], axis=2)
 
-        matches.frame2.features.apply_inliers(inliers)
         matches.frame2.features.landmarks = landmarks
-        matches.frame2.features.apply_inliers(best_inliers)
+        matches.frame2.features.apply_inliers(inliers)
         model, inliers = pose_estimator.estimate_pose(matches.frame2.features)
         rmatrix, tvec = model
         # compare rmatrix and tvec with ground truth

@@ -51,10 +51,8 @@ class LandmarksTriangulator:
 
         # Find relative pose
         if self._use_ransac:
-            M, landmarks, best_inliers, inliers = self._find_relative_pose(
-                points1, points2
-            )
-            return M, landmarks, best_inliers, inliers
+            M, landmarks, inliers = self._find_relative_pose(points1, points2)
+            return M, landmarks, inliers
         else:
             M, landmarks = self._find_relative_pose(points1, points2)
             return M, landmarks
@@ -244,10 +242,12 @@ class LandmarksTriangulator:
         """
         if self._use_ransac:
             E, inliers = self._find_essential_matrix(points1, points2)
-            points1 = points1[inliers]
-            points2 = points2[inliers]
+            points1_inliers = points1[inliers]
+            points2_inliers = points2[inliers]
         else:
             E = self._find_essential_matrix(points1, points2)
+            points1_inliers = points1
+            points2_inliers = points2
 
         # Find four possible solutions which need to be checked
         M2 = self._decompose_essential_matrix(
@@ -259,12 +259,11 @@ class LandmarksTriangulator:
         best_valid = -1
         best_inliers = None
         best_M = None
-        best_triangulated_points = None
 
         for m in range(M2.shape[0]):
             points3D = self._linear_triangulation(
-                points1,
-                points2,
+                points1_inliers,
+                points2_inliers,
                 self.camera1.intrinsic_matrix @ M1,
                 self.camera2.intrinsic_matrix @ M2[m],
             )
@@ -281,13 +280,24 @@ class LandmarksTriangulator:
                 best_valid = n_valid
                 best_inliers = cheirality_inliers
                 best_M = M2[m]
-                best_triangulated_points = points3D
+
+        # Return for all 2D points triangulated points (even if outlier in previous steps)
+        triangulated_points = self._linear_triangulation(
+            points1,
+            points2,
+            self.camera1.intrinsic_matrix @ M1,
+            self.camera2.intrinsic_matrix @ best_M,
+        )
 
         # If RANSAC was used, return also the inliers mask
         if self._use_ransac:
-            return best_M, best_triangulated_points, best_inliers, inliers
+            inlier_mask = np.zeros(
+                (points1.shape[0],), dtype=bool
+            )  # size of all inputs
+            inlier_mask[inliers] = best_inliers
+            return best_M, triangulated_points, inlier_mask
 
-        return best_M, best_triangulated_points
+        return best_M, triangulated_points
 
     def _linear_triangulation(self, points1, points2, C1, C2):
         """Linear Triangulation
