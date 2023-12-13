@@ -184,10 +184,9 @@ if __name__ == "__main__":
 
     # Visualize fundamental matrix
     matches = Matches(frame1, frame2, matches=good)
-    M, landmarks, best_inliers, inliers = triangulator.triangulate_matches(matches)
-    matches.frame2.features.apply_inliers(inliers)
+    M, landmarks, inliers = triangulator.triangulate_matches(matches)
     matches.frame2.features.landmarks = landmarks
-    matches.frame2.features.apply_inliers(best_inliers)
+    matches.frame2.features.apply_inliers(inliers)
     model, inliers = pose_estimator.estimate_pose(matches.frame2.features)
     rmatrix, tvec = model
     # compare rmatrix and tvec with ground truth
