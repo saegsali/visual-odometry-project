@@ -9,11 +9,14 @@ from vo.pose_estimation import P3PPoseEstimator
 from vo.landmarks import LandmarksTriangulator
 from vo.features import KLTTracker
 
+fig = plt.figure()
+ax = fig.add_subplot(111, projection="3d")
+plt.ion()
+plt.show()
+
 
 def plot_trajectory(trajectory):
     t_vec = trajectory[:, :3, 3]
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
 
     # Extract x, y, z coordinates from the trajectory
     x = t_vec[:, 0]
@@ -21,6 +24,7 @@ def plot_trajectory(trajectory):
     z = t_vec[:, 2]
 
     # Plot the camera trajectory
+    ax.clear()
     ax.plot(x, y, z, marker="o")
 
     ax.set_xlabel("X-axis")
@@ -30,8 +34,7 @@ def plot_trajectory(trajectory):
 
     # fix the scaling of the axes
     ax.set_aspect("equal", adjustable="box")
-
-    plt.show()
+    fig.canvas.draw()
 
 
 def main():
@@ -141,7 +144,7 @@ def main():
         )
 
         # project landmarks back to frame1
-        landmarks = np.linalg.inv(current_pose) @ landmarks
+        landmarks = current_pose @ landmarks
 
         # back to non-homogeneous coordinates
         landmarks = landmarks[:, :3, :] / np.expand_dims(landmarks[:, 3, :], axis=2)
@@ -157,19 +160,20 @@ def main():
         # print("2D-2D translation vector: ", M[:3, 3])
 
         # Update the current pose with rmatrix, tvec
-        current_pose = np.eye(4)
+        w_T_c = np.eye(4)
         # current_pose[:3, 3] = M[:3, 3]
         # current_pose[:3, :3] = M[:3, :3]
-        current_pose[:3, 3] = tvec[:, 0]
-        current_pose[:3, :3] = rmatrix
+        w_T_c[:3, 3] = tvec[:, 0]
+        w_T_c[:3, :3] = rmatrix
+        current_pose = np.linalg.inv(w_T_c)
 
         # Update the trajectory array
         trajectory.append(current_pose)
 
         if len(trajectory) > 0:
             # Plot the trajectory every 5 frames
-            if frame2.get_frame_id() % 5 == 0:
-                plot_trajectory(np.array(trajectory))
+            # if frame2.get_frame_id() % 5 == 0:
+            plot_trajectory(np.array(trajectory))
 
         # Display the resulting frame
         cv2.imshow("Press esc to stop", frame2.image)

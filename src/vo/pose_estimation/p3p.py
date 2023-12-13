@@ -53,7 +53,8 @@ class P3PPoseEstimator:
                 K (np.ndarray, optional): Intrinsic camera matrix. Defaults to self.intrinsic_matrix.
 
             Returns:
-                tuple | None: Tuple containing the estimated rotation matrix and translation vector if successful,
+                tuple | None: Tuple containing the estimated rotation matrix and translation vector
+                              which transfroms points in 3D coordinate to camera frame if successful,
                               otherwise None.
 
             """
@@ -119,7 +120,8 @@ class P3PPoseEstimator:
             features (Features): Object containing the 3D landmarks and 2D keypoints.
 
         Returns:
-            object: Rotation matrix and translation vector of the camera pose.
+            object: Rotation matrix and translation vector of the camera pose
+                    which transfrom points in 3D coordinate to camera frame.
             np.ndarray: Boolean array of inliers.
         """
         points_3d = features.landmarks
