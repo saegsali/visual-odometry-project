@@ -51,6 +51,7 @@ def main():
 
     for frame2 in tqdm(sequence):
         if frame2.get_frame_id() < 80:
+            frame1 = frame2
             continue
 
         triangulator = LandmarksTriangulator(
