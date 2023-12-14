@@ -1,20 +1,24 @@
 import numpy as np
 import cv2
+import time
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
-from vo.primitives import Sequence, Features, Matches
+from vo.primitives import Sequence, Features, Matches, State
 from vo.pose_estimation import P3PPoseEstimator
 from vo.landmarks import LandmarksTriangulator
 from vo.features import KLTTracker
 from vo.helpers import to_homogeneous_coordinates, to_cartesian_coordinates
-from vo.primitives import State
+from vo.visualization.overlays import display_fps
+
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection="3d")
 plt.ion()
 plt.show()
+
+USE_KLT = True
 
 
 def plot_trajectory(trajectory):
@@ -30,12 +34,13 @@ def plot_trajectory(trajectory):
     ax.plot(x, y, z, marker="o")
 
     ax.set_xlabel("X-axis")
-    ax.set_ylabel("Y-axis")
+    # ax.set_ylabel("Y-axis")
     ax.set_zlabel("Z-axis")
     ax.set_title("Camera Trajectory")
 
     # fix the scaling of the axes
     ax.set_aspect("equal", adjustable="box")
+    ax.view_init(elev=0, azim=-90)
     fig.canvas.draw()
 
 
@@ -132,7 +137,12 @@ def main():
 
     next(sequence)  # skip frame 1
     new_frame = next(sequence)
-    matches = get_sift_matches(init_frame, new_frame)
+
+    if USE_KLT:
+        klt = KLTTracker(init_frame)
+        matches = klt.track_features(new_frame)
+    else:
+        matches = get_sift_matches(init_frame, new_frame)
 
     M, landmarks, inliers = triangulator.triangulate_matches(matches)
 
@@ -141,26 +151,16 @@ def main():
     state.update_with_local_landmarks(landmarks, inliers=inliers)
     state.update_with_local_pose(M)
 
+    # Variables for calculating FPS
+    start_time = time.time()
+
     for new_frame in tqdm(sequence):
-        # # klt = KLTTracker(frame1)
-        # # Calculate optical flow
-        # matches = klt_tracker.track_features(new_frame)
-
-        # # Draw the tracks on the image
-        # image, mask = klt_tracker.draw_tracks()
-        # # Display the resulting frame
-        # cv2.imshow("Press esc to stop", image)
-
-        # k = cv2.waitKey(30) & 0xFF  # 30ms delay -> try lower value for more FPS :)
-        # if k == 27:
-        #     break
-
-        # if new_frame.get_frame_id() < 2:
-        #     continue
-
-        matches = get_sift_matches(
-            state.get_frame(), new_frame, force_recompute_frame1=True
-        )  # TODO: keep keypoints of current frame and do not detect new ones to simulate "tracking" by setting force_recompute_frame1=False
+        if USE_KLT:
+            matches = klt.track_features(new_frame)
+        else:
+            matches = get_sift_matches(
+                state.get_frame(), new_frame, force_recompute_frame1=True
+            )  # TODO: keep keypoints of current frame and do not detect new ones to simulate "tracking" by setting force_recompute_frame1=False
 
         # # FIXME: This step is not allowed in continuous operation, but triangulation below should be used
         M, landmarks, inliers = triangulator.triangulate_matches(matches)
@@ -205,9 +205,14 @@ def main():
             plot_trajectory(np.array(trajectory))
 
         # Display the resulting frame
-        cv2.imshow("Press esc to stop", new_frame.image)
+        img = display_fps(
+            image=new_frame.image,
+            start_time=start_time,
+            frame_count=new_frame.get_frame_id(),
+        )
+        cv2.imshow("Press esc to stop", img)
 
-        k = cv2.waitKey(30) & 0xFF  # 30ms delay -> try lower value for more FPS :)
+        k = cv2.waitKey(5) & 0xFF  # 30ms delay -> try lower value for more FPS :)
         if k == 27:
             break
 

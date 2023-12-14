@@ -82,6 +82,8 @@ class KLTTracker:
         if len(img.shape) == 3:
             img = self.to_gray(img)
         features = cv2.goodFeaturesToTrack(img, mask=mask, **self._feature_params)
+        # reshape features to (N,2,1)
+        features = features.reshape((-1, 2, 1))
         self._num_features = features.shape[0]
         return features
 
@@ -121,6 +123,9 @@ class KLTTracker:
 
         # remove points which are not inliers and have high error
         next_pts = next_pts[filter]
+
+        # reshape next_pts to (N,2,1)
+        next_pts = next_pts.reshape((-1, 2, 1))
 
         # Update keypoints in frame
         uids = self._old_frame.features.uids[filter]
@@ -167,10 +172,10 @@ class KLTTracker:
             )
             # Reset the mask for drawing tracks
             # self._last_masks = [] # Uncomment this line to reset the mask
-        print(
-            "Number of features:",
-            len(self.frame.features.keypoints[self.frame.features.inliers]),
-        )
+        # print(
+        #     "Number of features:",
+        #     len(self.frame.features.keypoints[self.frame.features.inliers]),
+        # )
 
         # return self.frame
         return self._matches
