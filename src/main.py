@@ -14,7 +14,7 @@ from vo.visualization.overlays import display_fps
 
 
 fig = plt.figure()
-ax = fig.add_subplot(111, projection="3d")
+ax = fig.add_subplot(1, 1, 1)
 plt.ion()
 plt.show()
 
@@ -26,21 +26,19 @@ def plot_trajectory(trajectory):
 
     # Extract x, y, z coordinates from the trajectory
     x = t_vec[:, 0]
-    y = t_vec[:, 1]
+    # y = t_vec[:, 1]
     z = t_vec[:, 2]
 
     # Plot the camera trajectory
     ax.clear()
-    ax.plot(x, y, z, marker="o")
+    ax.plot(x, z, marker="o")
 
     ax.set_xlabel("X-axis")
-    # ax.set_ylabel("Y-axis")
-    ax.set_zlabel("Z-axis")
+    ax.set_ylabel("Z-axis")
     ax.set_title("Camera Trajectory")
 
     # fix the scaling of the axes
     ax.set_aspect("equal", adjustable="box")
-    ax.view_init(elev=0, azim=-90)
     fig.canvas.draw()
 
 
