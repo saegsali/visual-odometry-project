@@ -16,6 +16,7 @@ from vo.visualization.overlays import display_fps
 fig = plt.figure()
 ax = fig.add_subplot(1, 1, 1)
 plt.ion()
+plt.pause(1.0e-6)
 plt.show()
 
 USE_KLT = True
@@ -40,6 +41,7 @@ def plot_trajectory(trajectory):
     # fix the scaling of the axes
     ax.set_aspect("equal", adjustable="box")
     fig.canvas.draw()
+    fig.canvas.flush_events()
 
 
 def get_sift_matches(frame1, frame2, force_recompute_frame1=False):
