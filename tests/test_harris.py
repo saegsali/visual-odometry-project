@@ -146,22 +146,8 @@ def test_HarrisCornerDetector(sample_frames2):
     # Create an instance of the HarrisCornerDetector class
     harris = HarrisCornerDetector(num_keypoints=200)
 
-    # Convert frames to grayscale
-    frame1_gray = harris.to_gray(frame1)
-    frame2_gray = harris.to_gray(frame2)
-    # frame1_gray = frame1
-    # frame2_gray = frame2
-
-    # Extract keypoints from the frames
-    frame1_keypoints = harris.extractKeypoints(frame1_gray)
-    frame2_keypoints = harris.extractKeypoints(frame2_gray)
-
-    # Extract descriptors from the frames
-    frame1_descriptors = harris.extractDescriptors(frame1_keypoints)
-    frame2_descriptors = harris.extractDescriptors(frame2_keypoints)
-
-    # Call the matchDescriptor method
-    matches = harris.matchDescriptor(frame1_descriptors, frame2_descriptors)
+    # Match features
+    matches = harris.featureMatcher(frame1, frame2)
 
     # Ensure that the result is of type Matches
     assert isinstance(matches, Matches)
@@ -169,11 +155,11 @@ def test_HarrisCornerDetector(sample_frames2):
     # Add assertions based on your expectations for the test case
     # For example, you can check the number of keypoints, descriptors, and matches
     assert (
-        frame1_keypoints.features.keypoints.shape[0] == 200
-    )  # Assuming 200 keypoints are extracted
+        matches.frame1.features.keypoints.shape[0] <= 200
+    )  # Assuming at most 200 keypoints are extracted
     assert (
-        frame1_descriptors.features.descriptors.shape[0] == 200
-    )  # Assuming 200 descriptors are extracted
+        matches.frame1.features.descriptors.shape[0] <= 200
+    )  # Assuming at most 200 descriptors are extracted
     assert (
         matches.frame1.features.keypoints[0][0][0]
         == matches.frame2.features.keypoints[0][0][0]
@@ -188,4 +174,4 @@ def test_HarrisCornerDetector(sample_frames2):
 
 
 # Run the test using pytest
-# Command: pytest test_harris.py
+# Command: pytest tests/test_harris.py

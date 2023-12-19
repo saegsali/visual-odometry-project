@@ -15,6 +15,8 @@ from vo.algorithms import RANSAC
 class HarrisCornerDetector:
     def __init__(
         self,
+        frame1: Frame = None,
+        frame2: Frame = None,
         patch_size: int = 9,
         kappa: float = 0.08,
         num_keypoints: int = 200,
@@ -23,18 +25,66 @@ class HarrisCornerDetector:
         match_lambda: float = 5.0,
     ):
         """Initialize feature matcher and set parameters."""
+        self._frame1 = frame1
+        self._frame2 = frame2
         self._patch_size = patch_size
         self._kappa = kappa
         self._num_keypoints = num_keypoints
         self._nonmaximum_supression_radius = nonmaximum_supression_radius
         self._descriptor_radius = descriptor_radius
         self._match_lambda = match_lambda
+    
+    @property
+    def img1_gray(self) -> np.ndarray:
+        if len(self._frame1.image.shape) == 2: 
+            return self._frame1.image
+        else:
+            return cv2.cvtColor(self._frame1.image, cv2.COLOR_BGR2GRAY)
+    
+    @property
+    def img2_gray(self) -> np.ndarray:
+        if len(self._frame2.image.shape) == 2: 
+            return self._frame2.image
+        else:
+            return cv2.cvtColor(self._frame2.image, cv2.COLOR_BGR2GRAY)
 
     def to_gray(self, frame) -> Frame:
         """Converts the image to a grayscale image."""
         img = frame.image
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        return Frame(gray_img)
+        return Frame(gray_img, features=frame.features)
+    
+    def featureMatcher(self, frame1: Frame, frame2: Frame) -> Matches:
+        """Track features of 2 frames using the Harris corner detector algorithm.
+
+        Args:
+            frame1 (Frame): The first frame.
+            frame2 (Frame): The second frame.
+
+        Returns:
+            matches (Matches): object containing the matching freature points of the input frames.
+        """
+        self._frame1 = frame1
+        self._frame2 = frame2
+
+        # Convert frames to grayscale
+        self._frame1.image = self.img1_gray
+        self._frame2.image = self.img2_gray
+
+        # Extract keypoints from the frames
+        frame1 = self.extractKeypoints(frame1)
+        frame1 = self.extractDescriptors(frame1)
+
+        # Extract descriptors from the frames
+        frame2 = self.extractKeypoints(frame2)
+        frame2 = self.extractDescriptors(frame2)
+
+        # Call the matchDescriptor method
+        matches = self.matchDescriptor(frame1, frame2)
+        # print('number of matches:', matches.frame1.features.keypoints.shape[0])
+
+        return matches
+    
 
     def extractKeypoints(self, frame) -> Frame:
         """Calculates the harris scores for an image given a patch size and a kappa value
@@ -50,6 +100,7 @@ class HarrisCornerDetector:
         pass
         # Get image from input frame
         img = frame.image
+        # img = self.img1_gray
 
         # Init sobel filters in both directions
         sobel_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
@@ -122,6 +173,7 @@ class HarrisCornerDetector:
         """
         # Get image and keypoints from input frame
         img = frame.image
+        # img = self.img_gray
         keypoints = frame.features.keypoints
 
         r = self._descriptor_radius
@@ -204,68 +256,49 @@ if __name__ == "__main__":
     from vo.primitives.loader import Sequence
 
     # Load sequence
-    sequence = Sequence("parking", camera=1, use_lowres=True)
-    frame1 = sequence.get_frame(0)
-    frame2 = sequence.get_frame(6)
+    sequence = Sequence("kitti", "data", camera=0, increment=1)
+    frame2 = sequence.get_frame(0)
 
     # Create an instance of the HarrisCornerDetector class
     harris = HarrisCornerDetector(match_lambda=5, nonmaximum_supression_radius=5)
 
-    frame1 = harris.to_gray(frame1)
-    frame1 = harris.extractKeypoints(frame1)
-    frame1 = harris.extractDescriptors(frame1)
+    for i in range(1, len(sequence)):
+        frame1 = frame2
+        next(sequence)
+        frame2 = next(sequence)
 
-    frame2 = harris.to_gray(frame2)
-    frame2 = harris.extractKeypoints(frame2)
-    frame2 = harris.extractDescriptors(frame2)
+        matches = harris.featureMatcher(frame1, frame2)
 
-    # # Compute matches using SIFT (TODO: replace later with our FeatureMatcher)
-    # sift = cv2.SIFT_create()
-    # keypoints1, descriptors1 = sift.detectAndCompute(frame1.image, None)
-    # keypoints2, descriptors2 = sift.detectAndCompute(frame2.image, None)
+        # Visualize
+        img1 = matches.frame1.image
+        img2 = matches.frame2.image
+        keypoint1 = matches.frame1.features.keypoints
+        keypoint2 = matches.frame2.features.keypoints
 
-    # keypoints1 = np.array([kp.pt for kp in keypoints1]).reshape(-1, 2, 1)
-    # keypoints2 = np.array([kp.pt for kp in keypoints2]).reshape(-1, 2, 1)
-    # descriptors1 = np.array(descriptors1)
-    # descriptors2 = np.array(descriptors2)
+        def draw_keypoints(img, keypoints):
+            img = img.copy()
+            H, W = img.shape[:2]
 
-    # frame1.features = Features(keypoints1, descriptors1)
-    # frame2.features = Features(keypoints2, descriptors2)
+            for i, keypoint in enumerate(keypoints):
+                # print(keypoint)
+                x1 = keypoint[0].astype(int)
+                y1 = keypoint[1].astype(int)
+                # print(x1.reshape(-1).shape)
+                img = cv2.circle(
+                    img,
+                    (x1[0], y1[0]),
+                    radius=2,
+                    color=((10 * i) % 255, i % 255, 255),
+                    thickness=2,
+                )
+                # print(i)
+            return img
 
-    # Call the matchDescriptor method
-    matches = harris.matchDescriptor(frame1, frame2)
-    print('number of matches:', matches.frame1.features.keypoints.shape[0])
+        img1 = draw_keypoints(img1, np.flip(keypoint1, axis=1))
+        img2 = draw_keypoints(img2, np.flip(keypoint2, axis=1))
 
-    # Visualize
-    img1 = matches.frame1.image
-    img2 = matches.frame2.image
-    keypoint1 = matches.frame1.features.keypoints
-    keypoint2 = matches.frame2.features.keypoints
+        img_both = cv2.hconcat([img1, img2])
 
-    def draw_keypoints(img, keypoints):
-        img = img.copy()
-        H, W = img.shape[:2]
-
-        for i, keypoint in enumerate(keypoints):
-            # print(keypoint)
-            x1 = keypoint[0].astype(int)
-            y1 = keypoint[1].astype(int)
-            # print(x1.reshape(-1).shape)
-            img = cv2.circle(
-                img,
-                (x1[0], y1[0]),
-                radius=2,
-                color=((10 * i) % 255, i % 255, 255),
-                thickness=2,
-            )
-            # print(i)
-        return img
-
-    img1 = draw_keypoints(img1, np.flip(keypoint1, axis=1))
-    img2 = draw_keypoints(img2, np.flip(keypoint2, axis=1))
-
-    img_both = cv2.hconcat([img1, img2])
-
-    cv2.imshow("Keypoints", img_both)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        cv2.imshow("Keypoints", img_both)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()

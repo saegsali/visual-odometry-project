@@ -8,7 +8,7 @@ from tqdm import tqdm
 from vo.primitives import Sequence, Features, Matches, State
 from vo.pose_estimation import P3PPoseEstimator
 from vo.landmarks import LandmarksTriangulator
-from vo.features import KLTTracker
+from vo.features import KLTTracker, HarrisCornerDetector
 from vo.helpers import to_homogeneous_coordinates, to_cartesian_coordinates
 from vo.visualization.overlays import display_fps
 
@@ -19,7 +19,8 @@ plt.ion()
 plt.pause(1.0e-6)
 plt.show()
 
-USE_KLT = True
+USE_KLT = False
+USE_HARRIS = True
 
 
 def plot_trajectory(trajectory):
@@ -141,6 +142,10 @@ def main():
     if USE_KLT:
         klt = KLTTracker(init_frame)
         matches = klt.track_features(new_frame)
+    elif USE_HARRIS:
+        harris = HarrisCornerDetector()
+        matches = harris.featureMatcher(init_frame, new_frame)
+        last_frame = new_frame
     else:
         matches = get_sift_matches(init_frame, new_frame)
 
@@ -157,6 +162,9 @@ def main():
     for new_frame in tqdm(sequence):
         if USE_KLT:
             matches = klt.track_features(new_frame)
+        elif USE_HARRIS:
+            matches = harris.featureMatcher(last_frame, new_frame)
+            last_frame = new_frame
         else:
             matches = get_sift_matches(
                 state.get_frame(), new_frame, force_recompute_frame1=True
