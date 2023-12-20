@@ -8,7 +8,7 @@ from tqdm import tqdm
 from vo.primitives import Sequence, Features, Matches, State
 from vo.pose_estimation import P3PPoseEstimator
 from vo.landmarks import LandmarksTriangulator
-from vo.features import KLTTracker, HarrisCornerDetector
+from vo.features import KLTTracker, HarrisCornerDetector, Tracker
 from vo.helpers import to_homogeneous_coordinates, to_cartesian_coordinates
 from vo.visualization.overlays import display_fps
 
@@ -19,8 +19,7 @@ plt.ion()
 plt.pause(1.0e-6)
 plt.show()
 
-USE_KLT = False
-USE_HARRIS = True
+TRACKER_MODE = "klt"
 
 
 def plot_trajectory(trajectory):
@@ -111,8 +110,6 @@ def main():
     sequence = Sequence("kitti")
     frame1 = next(sequence)
 
-    # klt_tracker = KLTTracker(frame1)
-
     # 4x4 array, zero rotation and translation vector at origin
     current_pose = np.eye(4)
     current_pose[:3, 3] = np.array([0, 0, 0])
@@ -139,15 +136,17 @@ def main():
     next(sequence)  # skip frame 1
     new_frame = next(sequence)
 
-    if USE_KLT:
-        klt = KLTTracker(init_frame)
-        matches = klt.track_features(new_frame)
-    elif USE_HARRIS:
-        harris = HarrisCornerDetector()
-        matches = harris.featureMatcher(init_frame, new_frame)
-        last_frame = new_frame
-    else:
-        matches = get_sift_matches(init_frame, new_frame)
+    tracker = Tracker(init_frame, mode=TRACKER_MODE)
+    matches = tracker.trackFeatures(new_frame)
+    # if USE_KLT:
+    #     klt = KLTTracker(init_frame)
+    #     matches = klt.track_features(new_frame)
+    # elif USE_HARRIS:
+    #     harris = HarrisCornerDetector(init_frame)
+    #     matches = harris.featureMatcher(new_frame)
+    #     last_frame = new_frame
+    # else:
+    #     matches = get_sift_matches(init_frame, new_frame)
 
     M, landmarks, inliers = triangulator.triangulate_matches(matches)
 
@@ -160,15 +159,17 @@ def main():
     start_time = time.time()
 
     for new_frame in tqdm(sequence):
-        if USE_KLT:
-            matches = klt.track_features(new_frame)
-        elif USE_HARRIS:
-            matches = harris.featureMatcher(last_frame, new_frame)
-            last_frame = new_frame
-        else:
-            matches = get_sift_matches(
-                state.get_frame(), new_frame, force_recompute_frame1=True
-            )  # TODO: keep keypoints of current frame and do not detect new ones to simulate "tracking" by setting force_recompute_frame1=False
+        matches = tracker.trackFeatures(new_frame)
+        # if USE_KLT:
+        #     matches = klt.track_features(new_frame)
+        # elif USE_HARRIS:
+        #     matches = harris.featureMatcher(new_frame)
+        #     last_frame = new_frame
+        # else:
+        #     matches = get_sift_matches(
+        #         state.get_frame(), new_frame, force_recompute_frame1=True
+        #     )  # TODO: keep keypoints of current frame and do not detect new ones to simulate "tracking" by setting force_recompute_frame1=False
+        
 
         # # FIXME: This step is not allowed in continuous operation, but triangulation below should be used
         M, landmarks, inliers = triangulator.triangulate_matches(matches)

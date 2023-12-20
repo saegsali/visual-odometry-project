@@ -15,8 +15,7 @@ from vo.algorithms import RANSAC
 class HarrisCornerDetector:
     def __init__(
         self,
-        frame1: Frame = None,
-        frame2: Frame = None,
+        frame: Frame = None,
         patch_size: int = 9,
         kappa: float = 0.08,
         num_keypoints: int = 200,
@@ -25,25 +24,25 @@ class HarrisCornerDetector:
         match_lambda: float = 5.0,
     ):
         """Initialize feature matcher and set parameters."""
-        self._frame1 = frame1
-        self._frame2 = frame2
+        self._frame1 = frame
+        self._frame2 = frame
         self._patch_size = patch_size
         self._kappa = kappa
         self._num_keypoints = num_keypoints
         self._nonmaximum_supression_radius = nonmaximum_supression_radius
         self._descriptor_radius = descriptor_radius
         self._match_lambda = match_lambda
-    
+
     @property
     def img1_gray(self) -> np.ndarray:
-        if len(self._frame1.image.shape) == 2: 
+        if len(self._frame1.image.shape) == 2:
             return self._frame1.image
         else:
             return cv2.cvtColor(self._frame1.image, cv2.COLOR_BGR2GRAY)
-    
+
     @property
     def img2_gray(self) -> np.ndarray:
-        if len(self._frame2.image.shape) == 2: 
+        if len(self._frame2.image.shape) == 2:
             return self._frame2.image
         else:
             return cv2.cvtColor(self._frame2.image, cv2.COLOR_BGR2GRAY)
@@ -53,8 +52,8 @@ class HarrisCornerDetector:
         img = frame.image
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         return Frame(gray_img, features=frame.features)
-    
-    def featureMatcher(self, frame1: Frame, frame2: Frame) -> Matches:
+
+    def featureMatcher(self, frame: Frame) -> Matches:
         """Track features of 2 frames using the Harris corner detector algorithm.
 
         Args:
@@ -64,27 +63,31 @@ class HarrisCornerDetector:
         Returns:
             matches (Matches): object containing the matching freature points of the input frames.
         """
-        self._frame1 = frame1
-        self._frame2 = frame2
+
+        # Update the frame
+        self._frame1 = self._frame2
+        self._frame2 = frame
+
+        # self._frame1 = frame1
+        # self._frame2 = frame2
 
         # Convert frames to grayscale
         self._frame1.image = self.img1_gray
         self._frame2.image = self.img2_gray
 
         # Extract keypoints from the frames
-        frame1 = self.extractKeypoints(frame1)
-        frame1 = self.extractDescriptors(frame1)
+        self._frame1 = self.extractKeypoints(self._frame1)
+        self._frame1 = self.extractDescriptors(self._frame1)
 
         # Extract descriptors from the frames
-        frame2 = self.extractKeypoints(frame2)
-        frame2 = self.extractDescriptors(frame2)
+        self._frame2 = self.extractKeypoints(self._frame2)
+        self._frame2 = self.extractDescriptors(self._frame2)
 
         # Call the matchDescriptor method
-        matches = self.matchDescriptor(frame1, frame2)
+        matches = self.matchDescriptor(self._frame1, self._frame2)
         # print('number of matches:', matches.frame1.features.keypoints.shape[0])
 
         return matches
-    
 
     def extractKeypoints(self, frame) -> Frame:
         """Calculates the harris scores for an image given a patch size and a kappa value
@@ -260,14 +263,14 @@ if __name__ == "__main__":
     frame2 = sequence.get_frame(0)
 
     # Create an instance of the HarrisCornerDetector class
-    harris = HarrisCornerDetector(match_lambda=5, nonmaximum_supression_radius=5)
+    harris = HarrisCornerDetector(frame2, match_lambda=5, nonmaximum_supression_radius=5)
 
     for i in range(1, len(sequence)):
         frame1 = frame2
         next(sequence)
         frame2 = next(sequence)
 
-        matches = harris.featureMatcher(frame1, frame2)
+        matches = harris.featureMatcher(frame2)
 
         # Visualize
         img1 = matches.frame1.image
