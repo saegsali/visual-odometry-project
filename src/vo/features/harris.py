@@ -155,7 +155,7 @@ class HarrisCornerDetector:
             h_max, w_max = np.argmax(harris_scores) // w, np.argmax(harris_scores) % w
             harris_scores[h_max - r : h_max + r + 1, w_max - r : w_max + r + 1] = 0
 
-            kp[i, :, :] = np.array([[h_max], [w_max]])
+            kp[i, :, :] = np.array([[w_max], [h_max]])
 
         # Init Frame with keypoints
         kp_feature = Features(kp)
@@ -189,8 +189,8 @@ class HarrisCornerDetector:
         # For all keypoints, extract the descriptor patch around it
         for kp in range(N):
             patch = padded[
-                int(keypoints[kp, 0, 0]) - r + r : int(keypoints[kp, 0, 0]) + r + 1 + r,
                 int(keypoints[kp, 1, 0]) - r + r : int(keypoints[kp, 1, 0]) + r + 1 + r,
+                int(keypoints[kp, 0, 0]) - r + r : int(keypoints[kp, 0, 0]) + r + 1 + r,
             ]
             desc[kp, :, :] = patch.reshape(-1, 1)
 
