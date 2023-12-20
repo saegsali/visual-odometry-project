@@ -3,6 +3,7 @@ import cv2
 import time
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from collections import deque
 
 
 from vo.primitives import Sequence, Features, Matches, State
@@ -19,7 +20,7 @@ plt.ion()
 plt.pause(1.0e-6)
 plt.show()
 
-TRACKER_MODE = "sift"
+TRACKER_MODE = "klt"
 
 
 def plot_trajectory(trajectory):
@@ -94,10 +95,13 @@ def main():
     state.update_with_local_landmarks(landmarks, inliers=inliers)
     state.update_with_local_pose(M)
 
-    # Variables for calculating FPS
-    start_time = time.time()
+    # Queue to store last [maxlen] FPS
+    fps_queue = deque([], maxlen=5)
 
     for new_frame in tqdm(sequence):
+        # Variable for calculating FPS
+        start_time = time.time()
+
         matches = tracker.trackFeatures(new_frame)
         # if USE_KLT:
         #     matches = klt.track_features(new_frame)
@@ -152,10 +156,10 @@ def main():
             plot_trajectory(np.array(trajectory))
 
         # Display the resulting frame
-        img = display_fps(
+        img, fps_queue = display_fps(
             image=new_frame.image,
             start_time=start_time,
-            frame_count=new_frame.get_frame_id(),
+            fps_queue = fps_queue
         )
         cv2.imshow("Press esc to stop", img)
 
