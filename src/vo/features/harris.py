@@ -57,8 +57,7 @@ class HarrisCornerDetector:
         """Track features of 2 frames using the Harris corner detector algorithm.
 
         Args:
-            frame1 (Frame): The first frame.
-            frame2 (Frame): The second frame.
+            frame (Frame): The new frame.
 
         Returns:
             matches (Matches): object containing the matching freature points of the input frames.

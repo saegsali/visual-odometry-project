@@ -19,7 +19,7 @@ plt.ion()
 plt.pause(1.0e-6)
 plt.show()
 
-TRACKER_MODE = "klt"
+TRACKER_MODE = "sift"
 
 
 def plot_trajectory(trajectory):
@@ -42,67 +42,6 @@ def plot_trajectory(trajectory):
     ax.set_aspect("equal", adjustable="box")
     fig.canvas.draw()
     fig.canvas.flush_events()
-
-
-def get_sift_matches(frame1, frame2, force_recompute_frame1=False):
-    # Compute matches using SIFT (TODO: replace later with our FeatureMatcher)
-    sift = cv2.SIFT_create()
-    if force_recompute_frame1 or frame1.features is None:
-        keypoints1_raw, descriptors1 = sift.detectAndCompute(frame1.image, None)
-        keypoints1 = np.array([kp.pt for kp in keypoints1_raw]).reshape(-1, 2, 1)
-        descriptors1 = np.array(descriptors1)
-        landmarks1 = None
-    else:
-        keypoints1 = frame1.features.keypoints
-        descriptors1 = frame1.features.descriptors
-        landmarks1 = frame1.features.landmarks
-
-    keypoints2_raw, descriptors2 = sift.detectAndCompute(frame2.image, None)
-    keypoints2 = np.array([kp.pt for kp in keypoints2_raw]).reshape(-1, 2, 1)
-    descriptors2 = np.array(descriptors2)
-
-    frame1.features = Features(keypoints1, descriptors1, landmarks=landmarks1)
-    frame2.features = Features(keypoints2, descriptors2)
-
-    # Match keypoints
-    index_params = dict(algorithm=0, trees=20)
-    search_params = dict(checks=150)  # or pass empty dictionary
-    flann = cv2.FlannBasedMatcher(index_params, search_params)
-
-    matches = flann.knnMatch(descriptors1, descriptors2, k=2)
-
-    # # Need to draw only good matches, so create a mask
-    # good_matches = [[0, 0] for i in range(len(matches))]
-
-    # # Good matches
-    # for i, (m, n) in enumerate(matches):
-    #     if m.distance < 0.5 * n.distance:
-    #         good_matches[i] = [1, 0]
-
-    # # plot matches
-    # img = cv2.drawMatchesKnn(
-    #     frame1.image,
-    #     keypoints1_raw,
-    #     frame2.image,
-    #     keypoints2_raw,
-    #     matches,
-    #     flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
-    # )
-    # cv2.imshow("Press esc to stop", img)
-    # k = cv2.waitKey(30) & 0xFF  # 30ms delay -> try lower value for more FPS :)
-    # if k == 27:
-    #     break
-
-    # Apply ratio test
-    good = []
-    for m, n in matches:
-        if m.distance < 0.8 * n.distance:
-            good.append([m.queryIdx, m.trainIdx])
-    good = np.array(good)
-
-    # Visualize fundamental matrix
-    matches = Matches(frame1, frame2, matches=good)
-    return matches
 
 
 def main():
@@ -169,7 +108,6 @@ def main():
         #     matches = get_sift_matches(
         #         state.get_frame(), new_frame, force_recompute_frame1=True
         #     )  # TODO: keep keypoints of current frame and do not detect new ones to simulate "tracking" by setting force_recompute_frame1=False
-        
 
         # # FIXME: This step is not allowed in continuous operation, but triangulation below should be used
         M, landmarks, inliers = triangulator.triangulate_matches(matches)

@@ -1,5 +1,5 @@
 from vo.primitives import Features, Frame, Matches
-from vo.features import KLTTracker, HarrisCornerDetector
+from vo.features import KLTTracker, HarrisCornerDetector, SIFTDetector
 
 
 class Tracker:
@@ -47,6 +47,8 @@ class Tracker:
                 self._tracker =  KLTTracker(frame)
             case "harris":
                 self._tracker =  HarrisCornerDetector(frame)
+            case "sift":
+                self._tracker = SIFTDetector(frame)
             case other:
                 raise Exception("Tracker Name not valid")
 
@@ -56,5 +58,7 @@ class Tracker:
                 return self._tracker.track_features(frame)
             case "harris":
                 return self._tracker.featureMatcher(frame)
+            case "sift":
+                return self._tracker.get_sift_matches(frame)
             case other:
                 raise Exception("Tracker Name not valid")
