@@ -3,6 +3,7 @@ import cv2
 import time
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from collections import deque
 
 
 from vo.primitives import Sequence, Features, Matches, State
@@ -145,10 +146,13 @@ def run(signals=None):
     state.update_with_local_landmarks(landmarks, inliers=inliers)
     state.update_with_local_pose(M)
 
-    # Variables for calculating FPS
-    start_time = time.time()
+    # Queue to store last [maxlen] FPS
+    fps_queue = deque([], maxlen=5)
 
     for new_frame in sequence:
+        # Variables for calculating FPS
+        start_time = time.time()
+
         if USE_KLT:
             matches = klt.track_features(new_frame)
         else:
@@ -193,6 +197,11 @@ def run(signals=None):
         # Update the trajectory array
         trajectory.append(state.get_pose())
 
+        # Display the resulting frame
+        img, fps_queue = display_fps(
+            image=new_frame.image, start_time=start_time, fps_queue=fps_queue
+        )
+        new_frame.image = img
         # Update GUI
         if signals is not None:
             signals.frame_signal.emit(new_frame)
