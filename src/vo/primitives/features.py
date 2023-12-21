@@ -4,57 +4,61 @@ import numpy as np
 class Features:
     def __init__(
         self,
-        keypoints: np.ndarray = None,
-        descriptors: np.ndarray = None,
+        keypoints: np.ndarray,
         landmarks: np.ndarray = None,
         uids: np.ndarray = None,
-        inliers: np.ndarray = None,
     ) -> None:
         """Initializes a features object.
 
         Args:
             keypoints (np.ndarray): array of keypoints pixel locations, shape = (N, 2).
             descriptors (np.ndarray, optional): array of keypoints descriptors, shape = (N, D). Defaults to None.
-            landmarks (np.ndarray, optional): array of associated landmark 3D position in world coordinates, shape = (N, 3). Defaults to None.
         """
         super().__init__()
-
-        self._keypoints = keypoints if not keypoints is None else np.zeros(shape=(0, 2))
-        self._descriptors = descriptors
-        self._landmarks = landmarks
-
-        self._uids = uids
-        self._inliers = (
-            np.ones(shape=(self.length)).astype(bool)
-            if inliers is None
-            else inliers.astype(bool)
-        )
-
-    def update_features(
-        self,
-        keypoints: np.ndarray,
-        descriptors: np.ndarray = None,
-        landmarks: np.ndarray = None,
-        uids: np.ndarray = None,
-        inliers: np.ndarray = None,
-    ) -> None:
+        n_keypoints = keypoints.shape[0]
         self._keypoints = keypoints
-        self._descriptors = descriptors
-        self._landmarks = (
+
+        # Use setter methods for all other properties to ensure consistency
+        self.descriptors = None
+
+        self.landmarks = (
             landmarks
-            if not landmarks is None
-            else -np.ones(shape=(self._keypoints.shape[0], 3, 1))
-        )
+            if landmarks is not None
+            else np.nan * np.ones(shape=(n_keypoints, 3, 1))
+        )  # initialize landmarks as unkown
+        self.state = np.zeros(
+            shape=(n_keypoints,)
+        )  # 0: unmatched, 1: matched, 2: triangulated
+
         self._uids = uids
-        self._inliers = (
-            np.ones(shape=(self.length)).astype(bool)
-            if inliers is None
-            else inliers.astype(bool)
-        )
+
+        # Instantiate inliers arrays (at start all inliers by default)
+        self._p3p_inliers = np.ones(shape=(self.length)).astype(bool)
+        self._triangulate_inliers = np.ones(shape=(self.length)).astype(bool)
+
+    @property
+    def matched_inliers_keypoints(self) -> np.ndarray:
+        return self._keypoints[self.match_inliers]
+
+    @property
+    def triangulate_inliers_keypoints(self) -> np.ndarray:
+        return self._keypoints[self._triangulate_inliers]
+
+    @property
+    def p3p_inliers_keypoints(self) -> np.ndarray:
+        return self._keypoints[self._p3p_inliers]
+
+    @property
+    def match_inliers(self) -> np.ndarray:
+        return self.state >= 1
 
     @property
     def keypoints(self) -> np.ndarray:
         return self._keypoints
+
+    @property
+    def state(self) -> np.ndarray:
+        return self._state
 
     @property
     def descriptors(self) -> np.ndarray:
@@ -74,12 +78,27 @@ class Features:
 
     @keypoints.setter
     def keypoints(self, keypoints: np.ndarray) -> None:
-        """Set keypoints.
+        """Set keypoints and check if number of keypoints and descriptors are equal.
 
         Args:
-            kepoints (np.ndarray): _description_
+            keypoints (np.ndarray): _description_
         """
+        assert (
+            keypoints.shape[0] == self._keypoints.shape[0]
+        ), "Unequal number of keypoints."
         self._keypoints = keypoints
+
+    @state.setter
+    def state(self, state: np.ndarray) -> None:
+        """Set state of keypoints.
+
+        Args:
+            state (np.ndarray): _description_
+        """
+        assert (
+            state.shape[0] == self._keypoints.shape[0]
+        ), "Unequal number of state and keypoints."
+        self._state = state
 
     @descriptors.setter
     def descriptors(self, descriptors: np.ndarray) -> None:
@@ -89,7 +108,7 @@ class Features:
             descriptors (np.ndarray): _description_
         """
         assert (
-            descriptors.shape[0] == self._keypoints.shape[0]
+            descriptors is None or descriptors.shape[0] == self._keypoints.shape[0]
         ), "Unequal number of descriptors and keypoints."
         self._descriptors = descriptors
 
@@ -100,17 +119,10 @@ class Features:
         ), "Unequal number of landmarks and keypoints."
         self._landmarks = landmarks
 
-    @inliers.setter
-    def inliers(self, inliers: np.ndarray) -> None:
-        assert (
-            inliers.shape[0] == self._keypoints.shape[0]
-        ), "Unequal number of inliers and keypoints."
-        self._inliers = inliers.astype(bool)
-
     @uids.setter
     def uids(self, uids: np.ndarray) -> None:
         assert (
-            uids.shape[0] == self._keypoints.shape[0]
+            uids is None or uids.shape[0] == self._keypoints.shape[0]
         ), "Unequal number of uids and keypoints."
         self._uids = uids
 
@@ -124,22 +136,26 @@ class Features:
             self._landmarks is None
             or self._landmarks.shape[0] == self._keypoints.shape[0]
         ), "Unequal number of landmarks and keypoints."
+        assert (
+            self._state.shape[0] == self._keypoints.shape[0]
+        ), "Unequal number of state and keypoints."
 
         return self._keypoints.shape[0]
 
-    def apply_inliers(self, inliers: np.ndarray = None) -> None:
-        """Applies the inliers mask to keypoints, descriptors and landmarks and removes outliers from arrays.
+    def set_p3p_inliers(self, inliers: np.ndarray) -> None:
+        """Updates the inliers mask.
 
         Args:
-            inliers (np.ndarray, optional): An updated inliers mask to use, otherwise uses stored inliers. Defaults to None.
+            inliers (np.ndarray, optional): An inliers mask to apply to current inlier mask.
         """
-        if inliers is not None:
-            self.inliers = inliers
+        self._p3p_inliers = np.zeros_like(self._p3p_inliers)
+        self._p3p_inliers[(self._state >= 1) & self._triangulate_inliers] = inliers
 
-        self._keypoints = self._keypoints[self._inliers]
-        if self._descriptors is not None:
-            self._descriptors = self._descriptors[self._inliers]
-        if self._landmarks is not None:
-            self._landmarks = self._landmarks[self._inliers]
+    def set_triangulate_inliers(self, inliers: np.ndarray) -> None:
+        """Updates the inliers mask.
 
-        self._inliers = np.ones(shape=(self.length)).astype(bool)
+        Args:
+            inliers (np.ndarray, optional): An inliers mask to apply to current inlier mask.
+        """
+        self._triangulate_inliers = np.zeros_like(self._triangulate_inliers)
+        self._triangulate_inliers[self._state >= 1] = inliers

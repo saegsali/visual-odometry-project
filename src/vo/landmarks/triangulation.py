@@ -47,8 +47,12 @@ class LandmarksTriangulator:
         Returns:
             np.ndarray: array of 3D landmark positions in coordinates of frame 1, shape = (N, 3, 1).
         """
-        points1 = to_homogeneous_coordinates(matches.frame1.features.keypoints)
-        points2 = to_homogeneous_coordinates(matches.frame2.features.keypoints)
+        points1 = to_homogeneous_coordinates(
+            matches.frame1.features.matched_inliers_keypoints
+        )
+        points2 = to_homogeneous_coordinates(
+            matches.frame2.features.matched_inliers_keypoints
+        )
 
         # Construct linear equations
         # l1 * p1 = K1 @ P
@@ -91,8 +95,8 @@ class LandmarksTriangulator:
             np.ndarray: array of 3D landmark positions in world coordinates, shape = (N, 3, 1).
             np.ndarray: M = [R t] which transforms coordinates from camera frame 1 to camera frame 2, shape = (3, 4).
         """
-        points1 = matches.frame1.features.keypoints
-        points2 = matches.frame2.features.keypoints
+        points1 = matches.frame1.features.matched_inliers_keypoints
+        points2 = matches.frame2.features.matched_inliers_keypoints
 
         # Find relative pose
         if self._use_ransac:
@@ -125,7 +129,6 @@ class LandmarksTriangulator:
                 ransacReprojThreshold=self._ransac_reproj_threshold,
                 confidence=self._ransac_confidence,
             )
-            print(F, inliers, points1, points2)
             return F, inliers.astype(bool).flatten()
 
         def model_fn(population):
@@ -230,7 +233,6 @@ class LandmarksTriangulator:
             np.ndarray: essential matrix, shape = (3, 3).
         """
         if self._use_ransac:
-            print(points1.shape, points2.shape)
             F, inliers = self._find_fundamental_matrix_ransac(points1, points2)
             E = self.camera2.intrinsic_matrix.T @ F @ self.camera1.intrinsic_matrix
             return E, inliers
@@ -394,7 +396,8 @@ class LandmarksTriangulator:
         """
 
         F, inliers = self._find_fundamental_matrix_ransac(
-            matches.frame1.features.keypoints, matches.frame2.features.keypoints
+            matches.frame1.features.matched_inliers_keypoints,
+            matches.frame2.features.matched_inliers_keypoints,
         )
 
         img1 = matches.frame1.image
@@ -402,10 +405,10 @@ class LandmarksTriangulator:
 
         # Compute line parameters in left and right image
         lines1 = F @ to_homogeneous_coordinates(
-            matches.frame1.features.keypoints[inliers]
+            matches.frame1.features.matched_inliers_keypoints[inliers]
         )
         lines2 = F.T @ to_homogeneous_coordinates(
-            matches.frame2.features.keypoints[inliers]
+            matches.frame2.features.matched_inliers_keypoints[inliers]
         )  # [a b c] @ [x y 1] = 0 -> y = -a/b * x - c/b
 
         # Draw images next to each other
@@ -483,7 +486,6 @@ if __name__ == "__main__":
     frame1 = next(sequence)
 
     for frame2 in sequence:
-        print(frame2)
         # Create camera
         camera = Camera(
             intrinsic_matrix=np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]])

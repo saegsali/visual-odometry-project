@@ -43,30 +43,35 @@ class State:
         self.curr_pose = np.linalg.inv(pose)
 
     def update_with_local_landmarks(
-        self, landmarks: np.ndarray, inliers: np.ndarray = None
+        self,
+        landmarks: np.ndarray,
+        keypoints_mask: np.ndarray,
     ) -> None:
         """Update the state with new landmarks, which are local frame of previous camera.
 
         Args:
             landmarks (np.ndarray): List of landmarks.
         """
-        self.curr_frame.features.landmarks = to_cartesian_coordinates(
+
+        landmarks = to_cartesian_coordinates(
             self.prev_pose @ to_homogeneous_coordinates(landmarks)
         )
-        if inliers is not None:
-            self.curr_frame.features.apply_inliers(inliers)
+
+        self.update_with_world_landmarks(landmarks, keypoints_mask)
 
     def update_with_world_landmarks(
-        self, landmarks: np.ndarray, inliers: np.ndarray = None
+        self, landmarks: np.ndarray, keypoints_mask: np.ndarray
     ) -> None:
         """Update the state with new landmarks, which are in world frame.
 
         Args:
             landmarks (np.ndarray): List of landmarks.
         """
-        self.curr_frame.features.landmarks = landmarks
-        if inliers is not None:
-            self.curr_frame.features.apply_inliers(inliers)
+
+        assert np.sum(keypoints_mask) == len(landmarks), "Mismatch in length"
+
+        self.curr_frame.features.landmarks[keypoints_mask] = landmarks
+        self.curr_frame.features.state[keypoints_mask] = 2  # set to triangulated
 
     def get_frame(self) -> Frame:
         return self.curr_frame
@@ -82,3 +87,15 @@ class State:
 
     def get_candidates(self) -> np.ndarray:
         raise NotImplementedError
+
+    def set_match_inliers(self, inliers: np.ndarray) -> None:
+        self.curr_frame.features.set_match_inliers(inliers)
+        self.prev_frame.features.set_match_inliers(inliers)
+
+    def set_p3p_inliers(self, inliers: np.ndarray) -> None:
+        self.curr_frame.features.set_p3p_inliers(inliers)
+        self.prev_frame.features.set_p3p_inliers(inliers)
+
+    def set_triangulate_inliers(self, inliers: np.ndarray) -> None:
+        self.curr_frame.features.set_triangulate_inliers(inliers)
+        self.prev_frame.features.set_triangulate_inliers(inliers)

@@ -17,8 +17,7 @@ class Tracker:
     def __init__(
         self,
         frame,
-        mode = "klt"
-
+        mode="klt"
         # frame2: Frame = None,
         # patch_size: int = 9,
         # kappa: float = 0.08,
@@ -32,7 +31,7 @@ class Tracker:
         self._mode = mode
         self._tracker = None
         self.initTracker(frame)
-        
+
         # self._frame2 = frame2
         # self._patch_size = patch_size
         # self._kappa = kappa
@@ -44,9 +43,9 @@ class Tracker:
     def initTracker(self, frame: Frame) -> Matches:
         match self._mode:
             case "klt":
-                self._tracker =  KLTTracker(frame)
+                self._tracker = KLTTracker(frame)
             case "harris":
-                self._tracker =  HarrisCornerDetector(frame)
+                self._tracker = HarrisCornerDetector(frame)
             case "sift":
                 self._tracker = SIFTDetector(frame)
             case other:

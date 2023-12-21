@@ -15,88 +15,123 @@ class Matches:
             matches (np.ndarray): array with indices of matching keypoints of the two images, shape = (M, 2).
         """
 
-        self.frame1 = self.get_matching_keypoints(frame1, matches[:, 0], True)
-        self.frame2 = self.get_matching_keypoints(frame2, matches[:, 1])
+        self.frame1 = frame1
+        self.frame2 = frame2
 
-        if self.frame1.features.landmarks is not None:
-            n_landmarks = (
-                0
-                if frame1.features.landmarks is None
-                else frame1.features.landmarks.shape[0]
-            )
-            self.frame2.features.landmarks[
-                :n_landmarks
-            ] = self.frame1.features.landmarks[:n_landmarks]
+        # Get triangulated & matched keypoints
+        triangulated_mask = self.frame1.features.state[matches[:, 0]] == 2
+        matched_mask = self.frame1.features.state[matches[:, 0]] == 1
+        newly_matched = self.frame1.features.state[matches[:, 0]] == 0
 
-    def get_matching_keypoints(self, frame: Frame, indices, check_landmarks=False):
-        """Create frame with only matching keypoints, descriptors and landmarks
+        triangulated_idx1 = matches[:, 0][triangulated_mask]
+        matched_idx1 = matches[:, 0][matched_mask]
+        newly_idx1 = matches[:, 0][newly_matched]
+        unmatched_idx1 = np.delete(
+            np.arange(0, len(self.frame1.features.keypoints)),
+            np.concatenate([triangulated_idx1, matched_idx1, newly_idx1]),
+        )
 
-        Args:
-            frame (Frame): object of class Frame.
-            indices (np.ndarray): array with indices of matching keypoints of the image (with other image), shape = (M, 1).
-        """
-        assert (
-            frame.features is not None and frame.features.keypoints is not None
-        ), "Frame must have features with keypoints"
-
-        if check_landmarks:
-            n_landmarks = (
-                0
-                if frame.features.landmarks is None
-                else frame.features.landmarks.shape[0]
-            )
-            mask = indices < n_landmarks
-            triangulated_indices = indices[mask]
-            candidate_indices = indices[~mask]
-        else:
-            triangulated_indices = []
-            candidate_indices = indices
-
-        kp = np.concatenate(
+        kp1 = np.concatenate(
             [
-                frame.features.keypoints[triangulated_indices],
-                frame.features.keypoints[candidate_indices],
+                frame1.features.keypoints[triangulated_idx1],
+                frame1.features.keypoints[matched_idx1],
+                frame1.features.keypoints[newly_idx1],
+                frame1.features.keypoints[unmatched_idx1],
             ],
             axis=0,
         )
 
-        desc = (
+        desc1 = (
             None
-            if frame.features.descriptors is None
+            if frame1.features.descriptors is None
             else np.concatenate(
                 [
-                    frame.features.descriptors[triangulated_indices],
-                    frame.features.descriptors[candidate_indices],
+                    frame1.features.descriptors[triangulated_idx1],
+                    frame1.features.descriptors[matched_idx1],
+                    frame1.features.descriptors[newly_idx1],
+                    frame1.features.descriptors[unmatched_idx1],
                 ],
                 axis=0,
             )
         )
 
-        lnd = (
-            frame.features.landmarks
-            if frame.features.landmarks is None
+        land1 = np.concatenate(
+            [
+                frame1.features.landmarks[triangulated_idx1],
+                frame1.features.landmarks[matched_idx1],
+                frame1.features.landmarks[newly_idx1],
+                frame1.features.landmarks[unmatched_idx1],
+            ],
+            axis=0,
+        )
+
+        state1 = np.concatenate(
+            (
+                2 * np.ones_like(triangulated_idx1),
+                1 * np.ones_like(matched_idx1),
+                1 * np.ones_like(newly_idx1),
+                0 * np.ones_like(unmatched_idx1),
+            ),
+        )
+
+        self.frame1.features.keypoints = kp1
+        self.frame1.features.state = state1
+        self.frame1.features.descriptors = desc1
+        self.frame1.features.landmarks = land1
+
+        # Update features of frame2
+        triangulated_idx2 = matches[:, 1][triangulated_mask]
+        matched_idx2 = matches[:, 1][matched_mask]
+        newly_idx2 = matches[:, 1][newly_matched]
+        unmatched_idx2 = np.delete(
+            np.arange(0, len(self.frame2.features.keypoints)),
+            np.concatenate([triangulated_idx2, matched_idx2, newly_idx2]),
+        )
+
+        kp2 = np.concatenate(
+            [
+                frame2.features.keypoints[triangulated_idx2],
+                frame2.features.keypoints[matched_idx2],
+                frame2.features.keypoints[newly_idx2],
+                frame2.features.keypoints[unmatched_idx2],
+            ],
+            axis=0,
+        )
+
+        desc2 = (
+            None
+            if frame1.features.descriptors is None
             else np.concatenate(
                 [
-                    frame.features.landmarks[triangulated_indices],
-                    -np.ones(shape=(candidate_indices.shape[0], 3, 1)),
+                    frame2.features.descriptors[triangulated_idx2],
+                    frame2.features.descriptors[matched_idx2],
+                    frame2.features.descriptors[newly_idx2],
+                    frame2.features.descriptors[unmatched_idx2],
                 ],
                 axis=0,
             )
         )
 
-        frame.features.update_features(keypoints=kp, descriptors=desc, landmarks=lnd)
+        land2 = np.concatenate(
+            [
+                frame2.features.landmarks[triangulated_idx2],
+                frame2.features.landmarks[matched_idx2],
+                frame2.features.landmarks[newly_idx2],
+                frame2.features.landmarks[unmatched_idx2],
+            ],
+            axis=0,
+        )
 
-        return frame
+        state2 = np.concatenate(
+            (
+                2 * np.ones_like(triangulated_idx2),
+                1 * np.ones_like(matched_idx2),
+                1 * np.ones_like(newly_idx2),
+                np.zeros_like(unmatched_idx2),
+            )
+        )
 
-    def apply_inliers(self, inliers: np.ndarray) -> None:
-        """Apply inliers to the matches.
-
-        Args:
-            inliers (np.ndarray): Boolean array of inliers.
-        """
-        self.frame1.features.apply_inliers(inliers)
-        self.frame2.features.apply_inliers(inliers)
-
-    def plot_matches(self):
-        """Plot the the images with the matching keypoints"""
-        # Todo
+        self.frame2.features.keypoints = kp2
+        self.frame2.features.state = state2
+        self.frame2.features.descriptors = desc2
+        self.frame2.features.landmarks = land2

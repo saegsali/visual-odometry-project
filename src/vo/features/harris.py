@@ -69,7 +69,7 @@ class HarrisCornerDetector:
         self._frame2.image = self.img2_gray
 
         # Extract keypoints from the frames
-        if len(self._frame1.features.keypoints) == 0:
+        if self._frame1.features is None:
             self._frame1 = self.extractKeypoints(self._frame1)
             self._frame1 = self.extractDescriptors(self._frame1)
 
@@ -152,7 +152,8 @@ class HarrisCornerDetector:
             kp[i, :, :] = np.array([[w_max], [h_max]])
 
         # Change Frame with keypoints
-        frame.features.keypoints = kp
+        assert frame.features is None, "Frame already has features"
+        frame.features = Features(kp)
 
         return frame
 

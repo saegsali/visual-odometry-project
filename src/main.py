@@ -11,7 +11,7 @@ from vo.pose_estimation import P3PPoseEstimator
 from vo.landmarks import LandmarksTriangulator
 from vo.features import KLTTracker, HarrisCornerDetector, Tracker
 from vo.helpers import to_homogeneous_coordinates, to_cartesian_coordinates
-from vo.visualization.overlays import display_fps
+from vo.visualization.overlays import display_fps, display_keypoints
 
 
 fig = plt.figure()
@@ -78,6 +78,8 @@ def main():
 
     tracker = Tracker(init_frame, mode=TRACKER_MODE)
     matches = tracker.trackFeatures(new_frame)
+    state.update_from_matches(matches)
+
     # if USE_KLT:
     #     klt = KLTTracker(init_frame)
     #     matches = klt.track_features(new_frame)
@@ -91,8 +93,10 @@ def main():
     M, landmarks, inliers = triangulator.triangulate_matches(matches)
 
     # Update state
-    state.update_from_matches(matches)
-    state.update_with_local_landmarks(landmarks, inliers=inliers)
+    state.set_triangulate_inliers(inliers)
+    state.update_with_local_landmarks(
+        landmarks[inliers], matches.frame2.features._triangulate_inliers
+    )
     state.update_with_local_pose(M)
 
     # Queue to store last [maxlen] FPS
@@ -115,19 +119,21 @@ def main():
 
         # # FIXME: This step is not allowed in continuous operation, but triangulation below should be used
         M, landmarks, inliers = triangulator.triangulate_matches(matches)
-        matches.apply_inliers(inliers)
+        matches.frame2.features.set_triangulate_inliers(inliers)
         landmarks = landmarks[inliers]
 
         # Ideally we would reuse landmarks/keypoints from previous frame and match only existing ones with new frame
         # and can then use p3p without triangulation first
+
         (rmatrix, tvec), inliers = pose_estimator.estimate_pose(
             Features(
-                keypoints=matches.frame2.features.keypoints,
+                keypoints=matches.frame2.features.triangulate_inliers_keypoints,
                 landmarks=to_cartesian_coordinates(
                     state.get_pose() @ to_homogeneous_coordinates(landmarks)
                 ),  # landmarks=matches.frame1.features.landmarks,
             )  # 3D-2D correspondences
         )
+        matches.frame2.features.set_p3p_inliers(inliers)
 
         # # Triangulate new landmarks (in future from candidate keypoints, here we detect and recompute all keypoints)
         # matches_all = get_sift_matches(
@@ -140,7 +146,9 @@ def main():
         # Update state
         state.update_from_matches(matches)
         state.update_with_world_pose(np.concatenate((rmatrix, tvec), axis=1))
-        state.update_with_local_landmarks(landmarks, inliers=inliers)
+        state.update_with_local_landmarks(
+            landmarks[inliers], matches.frame2.features._p3p_inliers
+        )
         # state.update_with_world_landmarks(
         #     to_cartesian_coordinates(
         #         state.prev_pose @ to_homogeneous_coordinates(landmarks_prev_frame)
@@ -157,10 +165,10 @@ def main():
 
         # Display the resulting frame
         img, fps_queue = display_fps(
-            image=new_frame.image,
-            start_time=start_time,
-            fps_queue = fps_queue
+            image=new_frame.image, start_time=start_time, fps_queue=fps_queue
         )
+        img = display_keypoints(img, new_frame.features)
+
         cv2.imshow("Press esc to stop", img)
 
         k = cv2.waitKey(5) & 0xFF  # 30ms delay -> try lower value for more FPS :)
