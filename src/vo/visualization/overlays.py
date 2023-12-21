@@ -50,7 +50,7 @@ def display_keypoints(image: np.array, features: Features) -> np.array:
     """
     n_keypoints = features.length
     n_matched = len(features.matched_inliers_keypoints)
-    n_triangulated = len(features.triangulate_inliers_keypoints)
+    n_triangulated = len(features.triangulated_inliers_keypoints)
 
     cv2.putText(
         image,

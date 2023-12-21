@@ -36,6 +36,7 @@ def plot_trajectory(trajectory):
     ax.plot(x, z, marker="o")
 
     ax.set_xlabel("X-axis")
+    # ax.set_ylabel("Y-axis")
     ax.set_ylabel("Z-axis")
     ax.set_title("Camera Trajectory")
 
@@ -80,23 +81,14 @@ def main():
     matches = tracker.trackFeatures(new_frame)
     state.update_from_matches(matches)
 
-    # if USE_KLT:
-    #     klt = KLTTracker(init_frame)
-    #     matches = klt.track_features(new_frame)
-    # elif USE_HARRIS:
-    #     harris = HarrisCornerDetector(init_frame)
-    #     matches = harris.featureMatcher(new_frame)
-    #     last_frame = new_frame
-    # else:
-    #     matches = get_sift_matches(init_frame, new_frame)
-
+    # Bootstrapping triangulation
     M, landmarks, inliers = triangulator.triangulate_matches(matches)
 
     # Update state
-    state.set_triangulate_inliers(inliers)
-    state.update_with_local_landmarks(
-        landmarks[inliers], matches.frame2.features._triangulate_inliers
-    )
+    inliers_mask = np.zeros_like(matches.frame2.features.match_inliers).astype(bool)
+    inliers_mask[matches.frame2.features.match_inliers] = inliers
+
+    state.update_with_local_landmarks(landmarks[inliers], inliers_mask)
     state.update_with_local_pose(M)
 
     # Queue to store last [maxlen] FPS
@@ -107,53 +99,25 @@ def main():
         start_time = time.time()
 
         matches = tracker.trackFeatures(new_frame)
-        # if USE_KLT:
-        #     matches = klt.track_features(new_frame)
-        # elif USE_HARRIS:
-        #     matches = harris.featureMatcher(new_frame)
-        #     last_frame = new_frame
-        # else:
-        #     matches = get_sift_matches(
-        #         state.get_frame(), new_frame, force_recompute_frame1=True
-        #     )  # TODO: keep keypoints of current frame and do not detect new ones to simulate "tracking" by setting force_recompute_frame1=False
-
-        # # FIXME: This step is not allowed in continuous operation, but triangulation below should be used
-        M, landmarks, inliers = triangulator.triangulate_matches(matches)
-        matches.frame2.features.set_triangulate_inliers(inliers)
-        landmarks = landmarks[inliers]
-
-        # Ideally we would reuse landmarks/keypoints from previous frame and match only existing ones with new frame
-        # and can then use p3p without triangulation first
-
         (rmatrix, tvec), inliers = pose_estimator.estimate_pose(
             Features(
-                keypoints=matches.frame2.features.triangulate_inliers_keypoints,
-                landmarks=to_cartesian_coordinates(
-                    state.get_pose() @ to_homogeneous_coordinates(landmarks)
-                ),  # landmarks=matches.frame1.features.landmarks,
+                keypoints=matches.frame2.features.triangulated_inliers_keypoints,
+                landmarks=matches.frame2.features.triangulated_inliers_landmarks,  # landmarks=matches.frame1.features.landmarks,
             )  # 3D-2D correspondences
         )
-        matches.frame2.features.set_p3p_inliers(inliers)
-
-        # # Triangulate new landmarks (in future from candidate keypoints, here we detect and recompute all keypoints)
-        # matches_all = get_sift_matches(
-        #     state.get_frame(), new_frame, force_recompute_frame1=True
-        # )
-        # landmarks_prev_frame = triangulator.triangulate_matches_with_relative_pose(
-        #     matches_all, T=np.linalg.inv(state.curr_pose) @ state.prev_pose
-        # )
+        # TODO: what to do with inliers?
 
         # Update state
         state.update_from_matches(matches)
         state.update_with_world_pose(np.concatenate((rmatrix, tvec), axis=1))
-        state.update_with_local_landmarks(
-            landmarks[inliers], matches.frame2.features._p3p_inliers
+
+        # Triangulate new landmarks (in future from candidate keypoints, here we detect and recompute all keypoints)
+        landmarks_prev_frame = triangulator.triangulate_matches_with_relative_pose(
+            matches, T=np.linalg.inv(state.curr_pose) @ state.prev_pose
         )
-        # state.update_with_world_landmarks(
-        #     to_cartesian_coordinates(
-        #         state.prev_pose @ to_homogeneous_coordinates(landmarks_prev_frame)
-        #     )
-        # )
+        state.update_with_local_landmarks(
+            landmarks_prev_frame, matches.frame2.features.match_inliers
+        )
 
         # Update the trajectory array
         trajectory.append(state.get_pose())

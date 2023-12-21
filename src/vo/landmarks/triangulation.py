@@ -57,6 +57,7 @@ class LandmarksTriangulator:
         # Construct linear equations
         # l1 * p1 = K1 @ P
         # l2 * p2 = K2 @ T @ P = K2 @ (R @ P + t)
+        # K1.inv @ p1 * l1 = R.inv @ (K2.inv @ p2 * l2 - t)
 
         # Construct matrix A
         R_inv = np.linalg.inv(T[:3, :3])
@@ -79,10 +80,28 @@ class LandmarksTriangulator:
             np.matmul(A.transpose(0, 2, 1), A), (A.transpose(0, 2, 1) @ b)
         )
         l0 = lambdas[:, 0].reshape(-1, 1, 1)
+        l1 = lambdas[:, 1].reshape(-1, 1, 1)
 
         # Recover P
         P = l0 * A1
-        return P
+        P2 = l1 * (A2 + b)
+
+        # FIXME: why is this not working?
+        # assert np.allclose(P, P2), f"Triangulation failed: {P[:1]}, {P2[:1]}"
+
+        P_open = cv2.triangulatePoints(
+            projMatr1=self.camera1.intrinsic_matrix @ np.eye(3, 4),
+            projMatr2=self.camera2.intrinsic_matrix @ T[:3],
+            projPoints1=matches.frame1.features.matched_inliers_keypoints.reshape(
+                -1, 2
+            ).T,
+            projPoints2=matches.frame2.features.matched_inliers_keypoints.reshape(
+                -1, 2
+            ).T,
+        )
+
+        P_open = to_cartesian_coordinates(P_open.T.reshape(-1, 4, 1))
+        return P_open
 
     def triangulate_matches(self, matches: Matches) -> np.ndarray:
         """Triangulate the 3D position of landmarks using matches from two frames,

@@ -67,11 +67,16 @@ class State:
         Args:
             landmarks (np.ndarray): List of landmarks.
         """
-
         assert np.sum(keypoints_mask) == len(landmarks), "Mismatch in length"
 
         self.curr_frame.features.landmarks[keypoints_mask] = landmarks
         self.curr_frame.features.state[keypoints_mask] = 2  # set to triangulated
+
+        assert not np.any(
+            np.isnan(
+                self.curr_frame.features.landmarks[self.curr_frame.features.state == 2]
+            )
+        ), "NaN in triangulated landmarks"
 
     def get_frame(self) -> Frame:
         return self.curr_frame

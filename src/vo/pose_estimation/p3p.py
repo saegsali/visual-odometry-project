@@ -59,6 +59,7 @@ class P3PPoseEstimator:
 
             """
             assert points.shape[0] == 4, "P3P requires 4 point correspondences"
+
             success, rvec, tvec = cv2.solvePnP(
                 np.stack(points[:, 0]),  # landmarks
                 np.stack(points[:, 1]),  # keypoints
@@ -126,6 +127,8 @@ class P3PPoseEstimator:
         """
         points_3d = features.landmarks
         points_2d = features.keypoints
+
+        assert points_3d.shape[1] == 3 and points_2d.shape[1] == 2, "Invalid shape."
         assert (
             points_3d is not None and points_2d is not None
         ), "3D landmarks and 2D keypoints must be provided."

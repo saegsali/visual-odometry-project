@@ -32,25 +32,33 @@ class Features:
 
         self._uids = uids
 
-        # Instantiate inliers arrays (at start all inliers by default)
-        self._p3p_inliers = np.ones(shape=(self.length)).astype(bool)
-        self._triangulate_inliers = np.ones(shape=(self.length)).astype(bool)
-
     @property
     def matched_inliers_keypoints(self) -> np.ndarray:
         return self._keypoints[self.match_inliers]
 
     @property
-    def triangulate_inliers_keypoints(self) -> np.ndarray:
-        return self._keypoints[self._triangulate_inliers]
+    def triangulated_inliers_keypoints(self) -> np.ndarray:
+        return self._keypoints[self.triangulate_inliers]
+
+    @property
+    def triangulated_inliers_landmarks(self) -> np.ndarray:
+        return self._landmarks[self.triangulate_inliers]
 
     @property
     def p3p_inliers_keypoints(self) -> np.ndarray:
-        return self._keypoints[self._p3p_inliers]
+        return self._keypoints[self.p3p_inliers]
 
     @property
     def match_inliers(self) -> np.ndarray:
         return self.state >= 1
+
+    @property
+    def triangulate_inliers(self) -> np.ndarray:
+        return self.state >= 2
+
+    @property
+    def p3p_inliers(self) -> np.ndarray:
+        return self.state >= 2
 
     @property
     def keypoints(self) -> np.ndarray:
@@ -67,10 +75,6 @@ class Features:
     @property
     def landmarks(self) -> np.ndarray:
         return self._landmarks
-
-    @property
-    def inliers(self) -> np.ndarray:
-        return self._inliers
 
     @property
     def uids(self) -> np.ndarray:
@@ -141,21 +145,3 @@ class Features:
         ), "Unequal number of state and keypoints."
 
         return self._keypoints.shape[0]
-
-    def set_p3p_inliers(self, inliers: np.ndarray) -> None:
-        """Updates the inliers mask.
-
-        Args:
-            inliers (np.ndarray, optional): An inliers mask to apply to current inlier mask.
-        """
-        self._p3p_inliers = np.zeros_like(self._p3p_inliers)
-        self._p3p_inliers[(self._state >= 1) & self._triangulate_inliers] = inliers
-
-    def set_triangulate_inliers(self, inliers: np.ndarray) -> None:
-        """Updates the inliers mask.
-
-        Args:
-            inliers (np.ndarray, optional): An inliers mask to apply to current inlier mask.
-        """
-        self._triangulate_inliers = np.zeros_like(self._triangulate_inliers)
-        self._triangulate_inliers[self._state >= 1] = inliers
