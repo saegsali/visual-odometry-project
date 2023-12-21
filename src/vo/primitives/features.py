@@ -4,7 +4,7 @@ import numpy as np
 class Features:
     def __init__(
         self,
-        keypoints: np.ndarray,
+        keypoints: np.ndarray = None,
         descriptors: np.ndarray = None,
         landmarks: np.ndarray = None,
         uids: np.ndarray = None,
@@ -18,10 +18,33 @@ class Features:
             landmarks (np.ndarray, optional): array of associated landmark 3D position in world coordinates, shape = (N, 3). Defaults to None.
         """
         super().__init__()
-        self._keypoints = keypoints
+
+        self._keypoints = keypoints if not keypoints is None else np.zeros(shape=(0, 2))
         self._descriptors = descriptors
         self._landmarks = landmarks
 
+        self._uids = uids
+        self._inliers = (
+            np.ones(shape=(self.length)).astype(bool)
+            if inliers is None
+            else inliers.astype(bool)
+        )
+
+    def update_features(
+        self,
+        keypoints: np.ndarray,
+        descriptors: np.ndarray = None,
+        landmarks: np.ndarray = None,
+        uids: np.ndarray = None,
+        inliers: np.ndarray = None,
+    ) -> None:
+        self._keypoints = keypoints
+        self._descriptors = descriptors
+        self._landmarks = (
+            landmarks
+            if not landmarks is None
+            else -np.ones(shape=(self._keypoints.shape[0], 3, 1))
+        )
         self._uids = uids
         self._inliers = (
             np.ones(shape=(self.length)).astype(bool)
@@ -49,6 +72,15 @@ class Features:
     def uids(self) -> np.ndarray:
         return self._uids
 
+    @keypoints.setter
+    def keypoints(self, keypoints: np.ndarray) -> None:
+        """Set keypoints.
+
+        Args:
+            kepoints (np.ndarray): _description_
+        """
+        self._keypoints = keypoints
+
     @descriptors.setter
     def descriptors(self, descriptors: np.ndarray) -> None:
         """Set descriptors and check if number of descriptors and keypoints are equal.
@@ -56,7 +88,6 @@ class Features:
         Args:
             descriptors (np.ndarray): _description_
         """
-        assert self._descriptors is None, "Descriptors already set."
         assert (
             descriptors.shape[0] == self._keypoints.shape[0]
         ), "Unequal number of descriptors and keypoints."
@@ -64,7 +95,6 @@ class Features:
 
     @landmarks.setter
     def landmarks(self, landmarks: np.ndarray) -> None:
-        assert self._landmarks is None, "Landmarks already set."
         assert (
             landmarks.shape[0] == self._keypoints.shape[0]
         ), "Unequal number of landmarks and keypoints."

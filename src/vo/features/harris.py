@@ -47,12 +47,6 @@ class HarrisCornerDetector:
         else:
             return cv2.cvtColor(self._frame2.image, cv2.COLOR_BGR2GRAY)
 
-    def to_gray(self, frame) -> Frame:
-        """Converts the image to a grayscale image."""
-        img = frame.image
-        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        return Frame(gray_img, features=frame.features)
-
     def featureMatcher(self, frame: Frame) -> Matches:
         """Track features of 2 frames using the Harris corner detector algorithm.
 
@@ -75,8 +69,9 @@ class HarrisCornerDetector:
         self._frame2.image = self.img2_gray
 
         # Extract keypoints from the frames
-        self._frame1 = self.extractKeypoints(self._frame1)
-        self._frame1 = self.extractDescriptors(self._frame1)
+        if len(self._frame1.features.keypoints) == 0:
+            self._frame1 = self.extractKeypoints(self._frame1)
+            self._frame1 = self.extractDescriptors(self._frame1)
 
         # Extract descriptors from the frames
         self._frame2 = self.extractKeypoints(self._frame2)
@@ -88,7 +83,7 @@ class HarrisCornerDetector:
 
         return matches
 
-    def extractKeypoints(self, frame) -> Frame:
+    def extractKeypoints(self, frame: Frame) -> Frame:
         """Calculates the harris scores for an image given a patch size and a kappa value
         Selects the best scores as keypoints and performs non-maximum supression of a (2r + 1)*(2r + 1) box around
         the current maximum.
@@ -156,13 +151,12 @@ class HarrisCornerDetector:
 
             kp[i, :, :] = np.array([[w_max], [h_max]])
 
-        # Init Frame with keypoints
-        kp_feature = Features(kp)
-        keypoints = Frame(img, kp_feature)
+        # Change Frame with keypoints
+        frame.features.keypoints = kp
 
-        return keypoints
+        return frame
 
-    def extractDescriptors(self, frame) -> Frame:
+    def extractDescriptors(self, frame: Frame) -> Frame:
         """
         Returns a Frame with a N x (2*r+1)^2 x 1 matrix of image patch vectors describing the extracted keypoints of the Frame.
         r is the descriptor_radius.
@@ -194,12 +188,11 @@ class HarrisCornerDetector:
             desc[kp, :, :] = patch.reshape(-1, 1)
 
         # Init Frame with keypoints and descriptors
-        desc_feature = Features(keypoints, desc)
-        descriptors = Frame(img, desc_feature)
+        frame.features.descriptors = desc
 
-        return descriptors
+        return frame
 
-    def matchDescriptor(self, frame1, frame2) -> Matches:
+    def matchDescriptor(self, frame1: Frame, frame2: Frame) -> Matches:
         """Matches the features of two frames based on their descriptors.
 
         Args:
@@ -262,7 +255,9 @@ if __name__ == "__main__":
     frame2 = sequence.get_frame(0)
 
     # Create an instance of the HarrisCornerDetector class
-    harris = HarrisCornerDetector(frame2, match_lambda=5, nonmaximum_supression_radius=5)
+    harris = HarrisCornerDetector(
+        frame2, match_lambda=5, nonmaximum_supression_radius=5
+    )
 
     for i in range(1, len(sequence)):
         frame1 = frame2

@@ -17,7 +17,7 @@ class Frame:
     ):
         self.image = image
         self.frame_id = None
-        self.features = features
+        self.features = features if features is not None else Features()
         self.intrinsics = intrinsics
         self.sensor = sensor
 

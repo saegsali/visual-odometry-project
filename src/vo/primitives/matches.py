@@ -14,10 +14,21 @@ class Matches:
             frame2 (Frame): second object of class Frame.
             matches (np.ndarray): array with indices of matching keypoints of the two images, shape = (M, 2).
         """
-        self.frame1 = self.get_matching_keypoints(frame1, matches[:, 0])
+
+        self.frame1 = self.get_matching_keypoints(frame1, matches[:, 0], True)
         self.frame2 = self.get_matching_keypoints(frame2, matches[:, 1])
 
-    def get_matching_keypoints(self, frame, indices):
+        if self.frame1.features.landmarks is not None:
+            n_landmarks = (
+                0
+                if frame1.features.landmarks is None
+                else frame1.features.landmarks.shape[0]
+            )
+            self.frame2.features.landmarks[
+                :n_landmarks
+            ] = self.frame1.features.landmarks[:n_landmarks]
+
+    def get_matching_keypoints(self, frame: Frame, indices, check_landmarks=False):
         """Create frame with only matching keypoints, descriptors and landmarks
 
         Args:
@@ -28,19 +39,54 @@ class Matches:
             frame.features is not None and frame.features.keypoints is not None
         ), "Frame must have features with keypoints"
 
-        return Frame(
-            image=frame.image,
-            features=Features(
-                keypoints=frame.features.keypoints[indices],
-                descriptors=None
-                if frame.features.descriptors is None
-                else frame.features.descriptors[indices],
-                landmarks=None
+        if check_landmarks:
+            n_landmarks = (
+                0
                 if frame.features.landmarks is None
-                else frame.features.landmarks[indices],
-            ),
-            sensor=frame.sensor,
+                else frame.features.landmarks.shape[0]
+            )
+            mask = indices < n_landmarks
+            triangulated_indices = indices[mask]
+            candidate_indices = indices[~mask]
+        else:
+            triangulated_indices = []
+            candidate_indices = indices
+
+        kp = np.concatenate(
+            [
+                frame.features.keypoints[triangulated_indices],
+                frame.features.keypoints[candidate_indices],
+            ],
+            axis=0,
         )
+
+        desc = (
+            None
+            if frame.features.descriptors is None
+            else np.concatenate(
+                [
+                    frame.features.descriptors[triangulated_indices],
+                    frame.features.descriptors[candidate_indices],
+                ],
+                axis=0,
+            )
+        )
+
+        lnd = (
+            frame.features.landmarks
+            if frame.features.landmarks is None
+            else np.concatenate(
+                [
+                    frame.features.landmarks[triangulated_indices],
+                    -np.ones(shape=(candidate_indices.shape[0], 3, 1)),
+                ],
+                axis=0,
+            )
+        )
+
+        frame.features.update_features(keypoints=kp, descriptors=desc, landmarks=lnd)
+
+        return frame
 
     def apply_inliers(self, inliers: np.ndarray) -> None:
         """Apply inliers to the matches.

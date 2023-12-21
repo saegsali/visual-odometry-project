@@ -125,6 +125,7 @@ class LandmarksTriangulator:
                 ransacReprojThreshold=self._ransac_reproj_threshold,
                 confidence=self._ransac_confidence,
             )
+            print(F, inliers, points1, points2)
             return F, inliers.astype(bool).flatten()
 
         def model_fn(population):
@@ -229,6 +230,7 @@ class LandmarksTriangulator:
             np.ndarray: essential matrix, shape = (3, 3).
         """
         if self._use_ransac:
+            print(points1.shape, points2.shape)
             F, inliers = self._find_fundamental_matrix_ransac(points1, points2)
             E = self.camera2.intrinsic_matrix.T @ F @ self.camera1.intrinsic_matrix
             return E, inliers

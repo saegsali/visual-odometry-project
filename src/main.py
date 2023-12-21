@@ -20,7 +20,7 @@ plt.ion()
 plt.pause(1.0e-6)
 plt.show()
 
-TRACKER_MODE = "klt"
+TRACKER_MODE = "harris"
 
 
 def plot_trajectory(trajectory):
