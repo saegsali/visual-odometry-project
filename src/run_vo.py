@@ -9,103 +9,17 @@ from collections import deque
 from vo.primitives import Sequence, Features, Matches, State
 from vo.pose_estimation import P3PPoseEstimator
 from vo.landmarks import LandmarksTriangulator
-from vo.features import KLTTracker
+from vo.features import Tracker
 from vo.helpers import to_homogeneous_coordinates, to_cartesian_coordinates
 from vo.visualization.overlays import display_fps
 
-
-USE_KLT = True
-if __name__ == "__main__":
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    plt.ion()
-    plt.show()
-
-    def plot_trajectory(trajectory):
-        t_vec = trajectory[:, :3, 3]
-
-        # Extract x, y, z coordinates from the trajectory
-        x = t_vec[:, 0]
-        # y = t_vec[:, 1]
-        z = t_vec[:, 2]
-
-        # Plot the camera trajectory
-        ax.clear()
-        ax.plot(x, z, marker="o")
-
-        ax.set_xlabel("X-axis")
-        ax.set_ylabel("Z-axis")
-        ax.set_title("Camera Trajectory")
-
-        # fix the scaling of the axes
-        ax.set_aspect("equal", adjustable="box")
-        fig.canvas.draw()
-
-
-def get_sift_matches(frame1, frame2, force_recompute_frame1=False):
-    # Compute matches using SIFT (TODO: replace later with our FeatureMatcher)
-    sift = cv2.SIFT_create()
-    if force_recompute_frame1 or frame1.features is None:
-        keypoints1_raw, descriptors1 = sift.detectAndCompute(frame1.image, None)
-        keypoints1 = np.array([kp.pt for kp in keypoints1_raw]).reshape(-1, 2, 1)
-        descriptors1 = np.array(descriptors1)
-        landmarks1 = None
-    else:
-        keypoints1 = frame1.features.keypoints
-        descriptors1 = frame1.features.descriptors
-        landmarks1 = frame1.features.landmarks
-
-    keypoints2_raw, descriptors2 = sift.detectAndCompute(frame2.image, None)
-    keypoints2 = np.array([kp.pt for kp in keypoints2_raw]).reshape(-1, 2, 1)
-    descriptors2 = np.array(descriptors2)
-
-    frame1.features = Features(keypoints1, descriptors1, landmarks=landmarks1)
-    frame2.features = Features(keypoints2, descriptors2)
-
-    # Match keypoints
-    index_params = dict(algorithm=0, trees=20)
-    search_params = dict(checks=150)  # or pass empty dictionary
-    flann = cv2.FlannBasedMatcher(index_params, search_params)
-
-    matches = flann.knnMatch(descriptors1, descriptors2, k=2)
-
-    # # Need to draw only good matches, so create a mask
-    # good_matches = [[0, 0] for i in range(len(matches))]
-
-    # # Good matches
-    # for i, (m, n) in enumerate(matches):
-    #     if m.distance < 0.5 * n.distance:
-    #         good_matches[i] = [1, 0]
-
-    # # plot matches
-    # img = cv2.drawMatchesKnn(
-    #     frame1.image,
-    #     keypoints1_raw,
-    #     frame2.image,
-    #     keypoints2_raw,
-    #     matches,
-    #     flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
-    # )
-    # cv2.imshow("Press esc to stop", img)
-    # k = cv2.waitKey(30) & 0xFF  # 30ms delay -> try lower value for more FPS :)
-    # if k == 27:
-    #     break
-
-    # Apply ratio test
-    good = []
-    for m, n in matches:
-        if m.distance < 0.8 * n.distance:
-            good.append([m.queryIdx, m.trainIdx])
-    good = np.array(good)
-
-    # Visualize fundamental matrix
-    matches = Matches(frame1, frame2, matches=good)
-    return matches
+TRACKER = "klt"
+DATASET = "kitti"
 
 
 def run(signals=None):
     # Load sequence
-    sequence = Sequence("kitti")
+    sequence = Sequence(DATASET)
 
     # 4x4 array, zero rotation and translation vector at origin
     current_pose = np.eye(4)
@@ -133,11 +47,8 @@ def run(signals=None):
     next(sequence)  # skip frame 1
     new_frame = next(sequence)
 
-    if USE_KLT:
-        klt = KLTTracker(init_frame)
-        matches = klt.track_features(new_frame)
-    else:
-        matches = get_sift_matches(init_frame, new_frame)
+    tracker = Tracker(init_frame, mode=TRACKER)
+    matches = tracker.trackFeatures(new_frame)
 
     M, landmarks, inliers = triangulator.triangulate_matches(matches)
 
@@ -153,12 +64,7 @@ def run(signals=None):
         # Variables for calculating FPS
         start_time = time.time()
 
-        if USE_KLT:
-            matches = klt.track_features(new_frame)
-        else:
-            matches = get_sift_matches(
-                state.get_frame(), new_frame, force_recompute_frame1=True
-            )  # TODO: keep keypoints of current frame and do not detect new ones to simulate "tracking" by setting force_recompute_frame1=False
+        matches = tracker.trackFeatures(new_frame)
 
         # # FIXME: This step is not allowed in continuous operation, but triangulation below should be used
         M, landmarks, inliers = triangulator.triangulate_matches(matches)
@@ -197,28 +103,26 @@ def run(signals=None):
         # Update the trajectory array
         trajectory.append(state.get_pose())
 
-        # Display the resulting frame
-        img, fps_queue = display_fps(
-            image=new_frame.image, start_time=start_time, fps_queue=fps_queue
-        )
-        new_frame.image = img
         # Update GUI
         if signals is not None:
+            # Add fps overlay to the image
+            img, fps_queue = display_fps(
+                image=new_frame.image, start_time=start_time, fps_queue=fps_queue
+            )
+            new_frame.image = img  # Overwrite image with fps overlay
+
             signals.frame_signal.emit(new_frame)
             signals.trajectory_signal.emit(state.get_pose())
 
-        else:
-            if len(trajectory) > 0:
-                # Plot the trajectory every 5 frames
-                # if frame2.get_frame_id() % 5 == 0:
-                plot_trajectory(np.array(trajectory))
+        else:  # run without GUI
+            # Plot the trajectory
+            plot_trajectory(np.array(trajectory))
 
-            # Display the resulting frame
-            img = display_fps(
-                image=new_frame.image,
-                start_time=start_time,
-                frame_count=new_frame.get_frame_id(),
+            # Add fps overlay to the image. This is done here to also count the time for plotting the trajectory.
+            img, fps_queue = display_fps(
+                image=new_frame.image, start_time=start_time, fps_queue=fps_queue
             )
+            # Display the current frame
             cv2.imshow("Press esc to stop", img)
 
             k = cv2.waitKey(5) & 0xFF  # 30ms delay -> try lower value for more FPS :)
@@ -227,4 +131,28 @@ def run(signals=None):
 
 
 if __name__ == "__main__":
-    run()
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    plt.ion()
+    plt.show()
+
+    def plot_trajectory(trajectory):
+        t_vec = trajectory[:, :3, 3]
+
+        # Extract x and z coordinates from the trajectory
+        x = t_vec[:, 0]
+        z = t_vec[:, 2]
+
+        # Plot the camera trajectory
+        ax.clear()
+        ax.plot(x, z, marker="o")
+
+        ax.set_xlabel("X-axis")
+        ax.set_ylabel("Z-axis")
+        ax.set_title("Camera Trajectory")
+
+        # fix the scaling of the axes
+        ax.set_aspect("equal", adjustable="box")
+        fig.canvas.draw()
+
+    run(signals=None)
