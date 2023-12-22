@@ -89,8 +89,10 @@ def main():
     M, landmarks, inliers = triangulator.triangulate_matches(matches)
 
     # Update state
-    inliers_mask = np.zeros_like(matches.frame2.features.match_inliers).astype(bool)
-    inliers_mask[matches.frame2.features.match_inliers] = inliers
+    inliers_mask = np.zeros_like(
+        matches.frame2.features.matched_candidate_inliers
+    ).astype(bool)
+    inliers_mask[matches.frame2.features.matched_candidate_inliers] = inliers
 
     state.update_with_local_landmarks(landmarks[inliers], inliers_mask)
     state.update_with_local_pose(M)
@@ -124,7 +126,7 @@ def main():
             matches, T=np.linalg.inv(state.curr_pose) @ state.prev_pose
         )
         state.update_with_local_landmarks(
-            landmarks_prev_frame, matches.frame2.features.match_inliers
+            landmarks_prev_frame, matches.frame2.features.matched_candidate_inliers
         )
 
         # Update the trajectory array

@@ -33,6 +33,10 @@ class Features:
         self._uids = uids
 
     @property
+    def matched_candidate_inliers_keypoints(self) -> np.ndarray:
+        return self._keypoints[self.matched_candidate_inliers]
+
+    @property
     def matched_inliers_keypoints(self) -> np.ndarray:
         return self._keypoints[self.match_inliers]
 
@@ -49,8 +53,12 @@ class Features:
         return self._keypoints[self.p3p_inliers]
 
     @property
-    def match_inliers(self) -> np.ndarray:
+    def matched_candidate_inliers(self) -> np.ndarray:
         return self.state == 1
+
+    @property
+    def match_inliers(self) -> np.ndarray:
+        return self.state >= 1
 
     @property
     def triangulate_inliers(self) -> np.ndarray:
