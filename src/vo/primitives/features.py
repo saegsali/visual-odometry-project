@@ -32,9 +32,26 @@ class Features:
 
         self._uids = uids
 
+        self._tracks = np.nan * np.ones(shape=(n_keypoints, 2, 1))
+        self._poses = np.nan * np.ones(shape=(n_keypoints, 4, 4))
+
+        self._candidate_mask = np.zeros(shape=(n_keypoints,)).astype(bool)
+
+    @property
+    def matched_candidate_inliers_tracks(self) -> np.ndarray:
+        return self._tracks[self.matched_candidate_inliers]
+
+    @property
+    def matched_candidate_inliers_poses(self) -> np.ndarray:
+        return self._poses[self.matched_candidate_inliers]
+
     @property
     def matched_candidate_inliers_keypoints(self) -> np.ndarray:
         return self._keypoints[self.matched_candidate_inliers]
+
+    @property
+    def candidate_inliers_keypoints(self) -> np.ndarray:
+        return self._keypoints[self.candidate_mask]
 
     @property
     def matched_inliers_keypoints(self) -> np.ndarray:
@@ -88,6 +105,18 @@ class Features:
     def uids(self) -> np.ndarray:
         return self._uids
 
+    @property
+    def tracks(self) -> np.ndarray:
+        return self._tracks
+
+    @property
+    def poses(self) -> np.ndarray:
+        return self._poses
+
+    @property
+    def candidate_mask(self) -> np.ndarray:
+        return self._candidate_mask
+
     @keypoints.setter
     def keypoints(self, keypoints: np.ndarray) -> None:
         """Set keypoints and check if number of keypoints and descriptors are equal.
@@ -137,6 +166,28 @@ class Features:
             uids is None or uids.shape[0] == self._keypoints.shape[0]
         ), "Unequal number of uids and keypoints."
         self._uids = uids
+
+    @tracks.setter
+    def tracks(self, tracks: np.ndarray) -> None:
+        assert (
+            tracks is None or tracks.shape[0] == self._keypoints.shape[0]
+        ), "Unequal number of tracks and keypoints."
+        self._tracks = tracks
+
+    @poses.setter
+    def poses(self, poses: np.ndarray) -> None:
+        assert (
+            poses is None or poses.shape[0] == self._keypoints.shape[0]
+        ), "Unequal number of poses and keypoints."
+        self._poses = poses
+
+    @candidate_mask.setter
+    def candidate_mask(self, candidate_mask: np.ndarray) -> None:
+        assert (
+            candidate_mask is None
+            or candidate_mask.shape[0] == self._keypoints.shape[0]
+        ), "Unequal number of candidate_mask and keypoints."
+        self._candidate_mask = candidate_mask
 
     @property
     def length(self) -> int:

@@ -48,10 +48,10 @@ class LandmarksTriangulator:
             np.ndarray: array of 3D landmark positions in coordinates of frame 1, shape = (N, 3, 1).
         """
         points1 = to_homogeneous_coordinates(
-            matches.frame1.features.matched_candidate_inliers_keypoints
+            matches.frame1.features.candidate_inliers_keypoints
         )
         points2 = to_homogeneous_coordinates(
-            matches.frame2.features.matched_candidate_inliers_keypoints
+            matches.frame2.features.candidate_inliers_keypoints
         )
 
         # Construct linear equations
@@ -92,10 +92,10 @@ class LandmarksTriangulator:
         P_open = cv2.triangulatePoints(
             projMatr1=self.camera1.intrinsic_matrix @ np.eye(3, 4),
             projMatr2=self.camera2.intrinsic_matrix @ T[:3],
-            projPoints1=matches.frame1.features.matched_candidate_inliers_keypoints.reshape(
+            projPoints1=matches.frame1.features.candidate_inliers_keypoints.reshape(
                 -1, 2
             ).T,
-            projPoints2=matches.frame2.features.matched_candidate_inliers_keypoints.reshape(
+            projPoints2=matches.frame2.features.candidate_inliers_keypoints.reshape(
                 -1, 2
             ).T,
         )
@@ -415,8 +415,8 @@ class LandmarksTriangulator:
         """
 
         F, inliers = self._find_fundamental_matrix_ransac(
-            matches.frame1.features.matched_candidate_inliers_keypoints,
-            matches.frame2.features.matched_candidate_inliers_keypoints,
+            matches.frame1.features.candidate_inliers_keypoints,
+            matches.frame2.features.candidate_inliers_keypoints,
         )
 
         img1 = matches.frame1.image
@@ -424,10 +424,10 @@ class LandmarksTriangulator:
 
         # Compute line parameters in left and right image
         lines1 = F @ to_homogeneous_coordinates(
-            matches.frame1.features.matched_candidate_inliers_keypoints[inliers]
+            matches.frame1.features.candidate_inliers_keypoints[inliers]
         )
         lines2 = F.T @ to_homogeneous_coordinates(
-            matches.frame2.features.matched_candidate_inliers_keypoints[inliers]
+            matches.frame2.features.candidate_inliers_keypoints[inliers]
         )  # [a b c] @ [x y 1] = 0 -> y = -a/b * x - c/b
 
         # Draw images next to each other

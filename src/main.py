@@ -83,6 +83,7 @@ def main():
 
     tracker = Tracker(init_frame, mode=TRACKER_MODE)
     matches = tracker.trackFeatures(new_frame)
+    matches.set_pose(state.get_pose())
     state.update_from_matches(matches)
 
     # Bootstrapping triangulation
@@ -105,6 +106,7 @@ def main():
         start_time = time.time()
 
         matches = tracker.trackFeatures(new_frame)
+        matches.set_pose(state.curr_pose)
         (rmatrix, tvec), inliers = pose_estimator.estimate_pose(
             Features(
                 keypoints=matches.frame2.features.triangulated_inliers_keypoints,
@@ -116,6 +118,7 @@ def main():
         # Update state
         state.update_from_matches(matches)
         state.update_with_world_pose(np.concatenate((rmatrix, tvec), axis=1))
+        matches.set_candidate_mask(state.curr_pose, camera.intrinsic_matrix)
 
         # Plot keypoints here because afterwards we triangulate all of them anyways
         new_frame.image = plot_keypoints(new_frame.image, new_frame.features)
@@ -126,7 +129,7 @@ def main():
             matches, T=np.linalg.inv(state.curr_pose) @ state.prev_pose
         )
         state.update_with_local_landmarks(
-            landmarks_prev_frame, matches.frame2.features.matched_candidate_inliers
+            landmarks_prev_frame, matches.frame2.features.candidate_mask
         )
 
         # Update the trajectory array
