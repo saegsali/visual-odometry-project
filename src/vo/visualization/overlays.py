@@ -38,7 +38,7 @@ def display_fps(image: np.array, start_time: float, fps_queue) -> np.array:
     return image, fps_queue
 
 
-def display_keypoints(image: np.array, features: Features) -> np.array:
+def display_keypoints_info(image: np.array, features: Features) -> np.array:
     """Display the keypoint count of the image.
 
     Args:
@@ -62,4 +62,51 @@ def display_keypoints(image: np.array, features: Features) -> np.array:
         1,
         cv2.LINE_AA,
     )
+    return image
+
+
+def draw_keypoints(img, keypoints, color):
+    H, W = img.shape[:2]
+
+    for i, keypoint in enumerate(keypoints.reshape(-1, 2)):
+        keypoint = keypoint.astype(int)
+        img = cv2.circle(
+            img,
+            keypoint,
+            radius=2,
+            color=color,
+            thickness=2,
+        )
+    return img
+
+
+def plot_keypoints(image: np.array, features: Features) -> np.array:
+    """Display the keypoint count of the image.
+
+    Args:
+        image (np.array): The image to display the FPS on.
+        features (float): The features object containing the keypoints.
+
+    Returns:
+        np.array: The image with the keypoint properties overlay.
+    """
+    if image.ndim == 2 or image.shape[2] == 1:
+        image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+
+    image = draw_keypoints(
+        image,
+        features.keypoints[features.state == 0],
+        color=(255, 0, 0),
+    )
+    image = draw_keypoints(
+        image,
+        features.keypoints[features.state == 1],
+        color=(0, 255, 255),
+    )
+    image = draw_keypoints(
+        image,
+        features.keypoints[features.state == 2],
+        color=(0, 255, 0),
+    )
+
     return image

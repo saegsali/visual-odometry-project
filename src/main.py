@@ -11,7 +11,11 @@ from vo.pose_estimation import P3PPoseEstimator
 from vo.landmarks import LandmarksTriangulator
 from vo.features import KLTTracker, HarrisCornerDetector, Tracker
 from vo.helpers import to_homogeneous_coordinates, to_cartesian_coordinates
-from vo.visualization.overlays import display_fps, display_keypoints
+from vo.visualization.overlays import (
+    display_fps,
+    display_keypoints_info,
+    plot_keypoints,
+)
 
 
 fig = plt.figure()
@@ -111,6 +115,10 @@ def main():
         state.update_from_matches(matches)
         state.update_with_world_pose(np.concatenate((rmatrix, tvec), axis=1))
 
+        # Plot keypoints here because afterwards we triangulate all of them anyways
+        new_frame.image = plot_keypoints(new_frame.image, new_frame.features)
+        new_frame.image = display_keypoints_info(new_frame.image, new_frame.features)
+
         # Triangulate new landmarks (in future from candidate keypoints, here we detect and recompute all keypoints)
         landmarks_prev_frame = triangulator.triangulate_matches_with_relative_pose(
             matches, T=np.linalg.inv(state.curr_pose) @ state.prev_pose
@@ -131,7 +139,6 @@ def main():
         img, fps_queue = display_fps(
             image=new_frame.image, start_time=start_time, fps_queue=fps_queue
         )
-        img = display_keypoints(img, new_frame.features)
 
         cv2.imshow("Press esc to stop", img)
 
