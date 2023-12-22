@@ -50,7 +50,7 @@ class Features:
 
     @property
     def match_inliers(self) -> np.ndarray:
-        return self.state >= 1
+        return self.state == 1
 
     @property
     def triangulate_inliers(self) -> np.ndarray:

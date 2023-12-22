@@ -25,6 +25,7 @@ plt.pause(1.0e-6)
 plt.show()
 
 TRACKER_MODE = "harris"
+DATA_SET = "kitti"
 
 
 def plot_trajectory(trajectory):
@@ -52,8 +53,7 @@ def plot_trajectory(trajectory):
 
 def main():
     # Load sequence
-    sequence = Sequence("kitti")
-    frame1 = next(sequence)
+    sequence = Sequence(DATA_SET)
 
     # 4x4 array, zero rotation and translation vector at origin
     current_pose = np.eye(4)
