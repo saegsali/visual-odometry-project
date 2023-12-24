@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import pytest
 
-from vo.helpers import to_homogeneous_coordinates
+from vo.helpers import to_homogeneous_coordinates, to_cartesian_coordinates
 from vo.landmarks.triangulation import LandmarksTriangulator
 from vo.sensors.camera import Camera
 from vo.primitives import Matches, Frame, Features
@@ -259,13 +259,65 @@ def test_triangulate_matches(
             Frame(None, features=Features(keypoints=points2)),
             matches=np.stack([np.arange(len(points1))] * 2, axis=-1),
         )
-
-        T_21 = camera2.c_T_w @ np.linalg.inv(camera1.c_T_w)
-        landmarks_triangulated = triangulator.triangulate_matches_with_relative_pose(
-            matches, T_21
+        matches.frame2.features.candidate_mask = np.ones(
+            shape=(points1.shape[0]), dtype=bool
         )
 
+        assert np.all(
+            matches.frame1.features.keypoints == points1
+        ), "Keypoints don't match anymore"
+        assert np.all(
+            matches.frame2.features.keypoints == points2
+        ), "Keypoints don't match anymore"
+        assert np.all(matches.frame2.features.tracks == points1), "Wrong tracks"
+        assert np.all(matches.frame2.features.poses == np.eye(4)), "Wrong poses set"
+
+        landmarks_triangulated = triangulator.triangulate_candidates(
+            matches.frame2.features, np.linalg.inv(camera2.c_T_w)
+        )
+        # print(landmarks[:5], landmarks_triangulated[:5])
+
         # Check that the triangulated landmarks are close to the original landmarks
+
+        assert np.allclose(landmarks, landmarks_triangulated, atol=1e-4)
+
+
+def test_triangulate_matches_cv(
+    triangulator: LandmarksTriangulator,
+    camera1: Camera,
+    camera2: Camera,
+):
+    N = 1000
+    for _ in range(10):
+        # Randomly generate 3D points
+        landmarks = rng.uniform(-1, 1, size=(N, 3, 1))
+        landmarks[:, 2] = landmarks[:, 2] * 5 + 10  # Make z-component positive
+
+        # Project 3D points into two camera frames
+        points1 = camera1.project_points_world_frame(landmarks)
+        points2 = camera2.project_points_world_frame(landmarks)
+
+        # Clip to image frame (such that not both cameras see all points, degenerate cases possible)
+        valid_points1 = np.all((0 <= points1) & (points1 <= 400), axis=-2).flatten()
+        valid_points2 = np.all((0 <= points1) & (points2 <= 400), axis=-2).flatten()
+
+        valid_points = valid_points1 & valid_points2
+        landmarks = landmarks[valid_points]
+        points1 = points1[valid_points]
+        points2 = points2[valid_points]
+
+        # Triangulate landmarks with known relative pose
+        landmarks_triangulated = cv2.triangulatePoints(
+            camera1.projection_matrix,
+            camera2.projection_matrix,
+            points1.reshape(-1, 2).T,
+            points2.reshape(-1, 2).T,
+        )
+
+        landmarks_triangulated = to_cartesian_coordinates(
+            landmarks_triangulated.T.reshape(-1, 4, 1)
+        )
+
         assert np.allclose(landmarks, landmarks_triangulated, atol=1e-4)
 
 
