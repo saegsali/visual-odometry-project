@@ -1,19 +1,18 @@
 import numpy as np
 from vo.primitives import Frame, Matches
 from vo.helpers import to_homogeneous_coordinates, to_cartesian_coordinates
+from vo.sensors import Camera
 
 
 class State:
-    def __init__(self, initial_frame: Frame) -> None:
+    def __init__(self, initial_frame: Frame, bearing_threshold: float = 0.05) -> None:
         self.curr_pose = np.eye(4)
         self.curr_frame = initial_frame
 
         self.prev_pose = None
         self.prev_frame = None
 
-        # self.candidates = np.ones(shape=(self.curr_frame.features.length)).astype(
-        #     bool
-        # )  # use all as candidates for now
+        self._bearing_threshold = bearing_threshold
 
     def update_from_matches(self, matches: Matches) -> None:
         self.prev_frame = self.curr_frame
@@ -32,6 +31,9 @@ class State:
             pose = np.concatenate((pose, np.array([[0, 0, 0, 1]])), axis=0)
         self.curr_pose = self.prev_pose @ np.linalg.inv(pose)
 
+        # Update pose of tracks in current frame
+        self.curr_frame.features.set_pose_for_new_tracks(self.curr_pose)
+
     def update_with_world_pose(self, pose: np.ndarray) -> None:
         """Update the state with new pose, which is relative to world frame (transforms world into frame).
 
@@ -41,6 +43,9 @@ class State:
         if pose.shape == (3, 4):
             pose = np.concatenate((pose, np.array([[0, 0, 0, 1]])), axis=0)
         self.curr_pose = np.linalg.inv(pose)
+
+        # Update pose of tracks in current frame
+        self.curr_frame.features.set_pose_for_new_tracks(self.curr_pose)
 
     def update_with_local_landmarks(
         self,
@@ -68,6 +73,9 @@ class State:
             landmarks (np.ndarray): List of landmarks.
         """
         assert np.sum(keypoints_mask) == len(landmarks), "Mismatch in length"
+        assert np.all(
+            self.curr_frame.features.state[keypoints_mask] == 1
+        ), "Already triangulated point"
 
         self.curr_frame.features.landmarks[keypoints_mask] = landmarks
         self.curr_frame.features.state[keypoints_mask] = 2  # set to triangulated
@@ -90,17 +98,88 @@ class State:
     def get_keypoints(self) -> np.ndarray:
         return self.curr_frame.features.keypoints
 
-    def get_candidates(self) -> np.ndarray:
-        raise NotImplementedError
+    def compute_candidates(self) -> None:
+        # Get matched keypoints which are not yet triangulated
+        keypoints_end = (
+            self.curr_frame.features.matched_candidate_inliers_keypoints
+        )  # end of track
+        keypoints_start = (
+            self.curr_frame.features.matched_candidate_inliers_tracks
+        )  # start of track
 
-    def set_match_inliers(self, inliers: np.ndarray) -> None:
-        self.curr_frame.features.set_match_inliers(inliers)
-        self.prev_frame.features.set_match_inliers(inliers)
+        pose_start = self.curr_frame.features.matched_candidate_inliers_poses
+        pose_end = np.stack([self.curr_pose] * pose_start.shape[0], axis=0)
 
-    def set_p3p_inliers(self, inliers: np.ndarray) -> None:
-        self.curr_frame.features.set_p3p_inliers(inliers)
-        self.prev_frame.features.set_p3p_inliers(inliers)
+        # Compute the bearing angle for all tracks
+        bearing_angles = self._calculate_bearing_angle(
+            self.curr_frame.sensor,
+            pose_start,
+            pose_end,
+            keypoints_start,
+            keypoints_end,
+        )
 
-    def set_triangulate_inliers(self, inliers: np.ndarray) -> None:
-        self.curr_frame.features.set_triangulate_inliers(inliers)
-        self.prev_frame.features.set_triangulate_inliers(inliers)
+        # Set candidates
+        candidates = bearing_angles >= self._bearing_threshold
+        self.curr_frame.features.candidate_mask[
+            self.curr_frame.features.matched_candidate_inliers
+        ] = candidates
+
+    def reset_outliers(self, outliers: np.ndarray) -> None:
+        """Resets all outliers to unmatched state and resets track and pose of track.
+
+        Args:
+            outliers (np.ndarray): outlier mask for all keypoints
+        """
+        self.curr_frame.features.state[outliers] == 0  # unmatched state
+        self.curr_frame.features.tracks[outliers] == self.curr_frame.features.keypoints[
+            outliers
+        ]
+        self.curr_frame.features.poses[outliers] == self.curr_pose
+
+    def _calculate_bearing_angle(
+        self,
+        camera: Camera,
+        T1: np.ndarray,
+        T2: np.ndarray,
+        points1: np.ndarray,
+        points2: np.ndarray,
+    ) -> np.ndarray:
+        """Calculate the bearing angle between two points in two different frames.
+
+        This method calculates the bearing angle between two points in two different frames using the camera intrinsic matrix,
+        camera pose transformation matrices, and pixel coordinates of the points.
+
+        Args:
+            camera (np.ndarray):  Sensor object of camera (note: assumes that at all track positions same camera used).
+            T1 (np.ndarray): Nx4x4 transformation matrix representing the camera pose of the start of the track.
+            T2 (np.ndarray): Nx4x4 transformation matrix representing the camera pose of the end of the track.
+            points1 (np.ndarray): Array of pixel coordinates with shape (N, 2, 1) at the start of the track.
+            points2 (np.ndarray): Array of pixel coordinates with shape (N, 2, 1) at the end of the track.
+
+        Returns:
+            np.ndarray: Array of bearing angles with shape (N, ).
+
+        """
+        assert len(points1) == len(points2), "Points must have same length"
+        assert points1.ndim == 3, "Points must have three dimensions"
+        assert points2.ndim == 3, "Points must have three dimensions"
+
+        assert not np.any(np.isnan(points1)), "Points1 contains invalid points"
+        assert not np.any(np.isnan(points2)), "Points2 contains invalid points"
+        assert not np.any(np.isnan(T1)), "Invalid start poses"
+        assert not np.any(np.isnan(T2)), "Invalid end poses"
+
+        dir1 = camera.to_normalized_image_coordinates(points1)
+        dir2 = camera.to_normalized_image_coordinates(points2)
+
+        # Rotate both direction / bearing bectors into world frame
+        dir1 = np.matmul(T1[:, :3, :3], dir1).reshape(-1, 3)
+        dir2 = np.matmul(T2[:, :3, :3], dir2).reshape(-1, 3)
+
+        # Compute angle between vectors
+        angles = np.arccos(
+            np.sum(dir1 * dir2, axis=-1)
+            / (np.linalg.norm(dir1, axis=-1) * np.linalg.norm(dir2, axis=-1))
+        )
+        return angles

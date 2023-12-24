@@ -18,7 +18,7 @@ class HarrisCornerDetector:
         frame: Frame = None,
         patch_size: int = 9,
         kappa: float = 0.08,
-        num_keypoints: int = 500,
+        num_keypoints: int = 1000,
         nonmaximum_supression_radius: int = 5,
         descriptor_radius: int = 9,
         match_lambda: float = 5.0,

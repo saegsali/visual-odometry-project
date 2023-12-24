@@ -15,7 +15,11 @@ from vo.visualization.overlays import (
     display_fps,
     display_keypoints_info,
     plot_keypoints,
+    plot_matches,
 )
+
+from vo.visualization.point_cloud import PointCloudVisualizer
+from vo.sensors import Camera
 
 
 fig = plt.figure()
@@ -23,6 +27,8 @@ ax = fig.add_subplot(1, 1, 1)
 plt.ion()
 plt.pause(1.0e-6)
 plt.show()
+
+pc_visualizer = PointCloudVisualizer()
 
 TRACKER_MODE = "harris"
 DATA_SET = "kitti"
@@ -68,10 +74,9 @@ def main():
     )
     pose_estimator = P3PPoseEstimator(
         intrinsic_matrix=camera.intrinsic_matrix,
-        inlier_threshold=1,
+        inlier_threshold=3,
         outlier_ratio=0.9,
         confidence=0.99,
-        max_iterations=1000,
     )
 
     # Perform bootstrapping
@@ -83,20 +88,24 @@ def main():
 
     tracker = Tracker(init_frame, mode=TRACKER_MODE)
     matches = tracker.trackFeatures(new_frame)
-    matches.set_pose(state.get_pose())
     state.update_from_matches(matches)
 
     # Bootstrapping triangulation
     M, landmarks, inliers = triangulator.triangulate_matches(matches)
+    pc_visualizer.visualize_points(landmarks[inliers])
 
-    # Update state
+    outliers = np.zeros(shape=(matches.frame2.features.length,), dtype=bool)
+    outliers[matches.frame2.features.match_inliers] = ~inliers
+
+    state.update_with_local_pose(M)
+
+    # Update landmarks (Note: order is important, always update pose before landmarks)
     inliers_mask = np.zeros_like(
         matches.frame2.features.matched_candidate_inliers
     ).astype(bool)
     inliers_mask[matches.frame2.features.matched_candidate_inliers] = inliers
-
     state.update_with_local_landmarks(landmarks[inliers], inliers_mask)
-    state.update_with_local_pose(M)
+    state.reset_outliers(outliers)
 
     # Queue to store last [maxlen] FPS
     fps_queue = deque([], maxlen=5)
@@ -106,34 +115,43 @@ def main():
         start_time = time.time()
 
         matches = tracker.trackFeatures(new_frame)
-        matches.set_pose(state.curr_pose)
+
         (rmatrix, tvec), inliers = pose_estimator.estimate_pose(
             Features(
                 keypoints=matches.frame2.features.triangulated_inliers_keypoints,
                 landmarks=matches.frame2.features.triangulated_inliers_landmarks,  # landmarks=matches.frame1.features.landmarks,
             )  # 3D-2D correspondences
         )
-        # TODO: what to do with inliers?
+
+        outliers = np.zeros(shape=(matches.frame2.features.length,), dtype=bool)
+        outliers[matches.frame2.features.triangulate_inliers] = ~inliers
 
         # Update state
         state.update_from_matches(matches)
         state.update_with_world_pose(np.concatenate((rmatrix, tvec), axis=1))
-        matches.set_candidate_mask(state.curr_pose, camera.intrinsic_matrix)
+        state.reset_outliers(outliers)  # before computing candidates reset all outliers
+        state.compute_candidates()
 
-        # Plot keypoints here because afterwards we triangulate all of them anyways
-        new_frame.image = plot_keypoints(new_frame.image, new_frame.features)
-        new_frame.image = display_keypoints_info(new_frame.image, new_frame.features)
+        # match_img = plot_matches(matches)
 
-        # Triangulate new landmarks (in future from candidate keypoints, here we detect and recompute all keypoints)
-        landmarks_prev_frame = triangulator.triangulate_matches_with_relative_pose(
-            matches, T=np.linalg.inv(state.curr_pose) @ state.prev_pose
-        )
-        state.update_with_local_landmarks(
-            landmarks_prev_frame, matches.frame2.features.candidate_mask
-        )
+        # Triangulate new landmarks
+        n_candidates = np.sum(state.curr_frame.features.candidate_mask)
+
+        if n_candidates > 0:
+            landmarks_world = triangulator.triangulate_candidates(
+                state.curr_frame.features,
+                current_pose=state.get_pose(),
+            )
+            state.update_with_world_landmarks(
+                landmarks_world, matches.frame2.features.candidate_mask
+            )
+            pc_visualizer.visualize_points(landmarks_world)
 
         # Update the trajectory array
         trajectory.append(state.get_pose())
+        pc_visualizer.visualize_camera(
+            camera=Camera(matches.frame2.intrinsics, R=rmatrix, t=tvec)
+        )
 
         if len(trajectory) > 0:
             # Plot the trajectory every 5 frames
@@ -144,8 +162,12 @@ def main():
         img, fps_queue = display_fps(
             image=new_frame.image, start_time=start_time, fps_queue=fps_queue
         )
+        # Plot keypoints here because afterwards we triangulate all of them anyways
+        img = plot_keypoints(img, new_frame.features)
+        img = display_keypoints_info(img, new_frame.features)
 
         cv2.imshow("Press esc to stop", img)
+        # cv2.imshow("Press esc to stop", match_img)
 
         k = cv2.waitKey(5) & 0xFF  # 30ms delay -> try lower value for more FPS :)
         if k == 27:
