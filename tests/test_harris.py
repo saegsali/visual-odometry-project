@@ -13,12 +13,10 @@ def sample_frames1():
     descriptors1 = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
     descriptors2 = np.array([[2, 3, 4], [5, 6, 7], [8, 9, 10]])
 
-    features1 = Features(
-        keypoints=np.array([[0, 0], [1, 1], [2, 2]]), descriptors=descriptors1
-    )
-    features2 = Features(
-        keypoints=np.array([[0, 0], [1, 1], [2, 2]]), descriptors=descriptors2
-    )
+    features1 = Features(keypoints=np.array([[0, 0], [1, 1], [2, 2]]).reshape(-1, 2, 1))
+    features2 = Features(keypoints=np.array([[0, 0], [1, 1], [2, 2]]).reshape(-1, 2, 1))
+    features1.descriptors = descriptors1
+    features2.descriptors = descriptors2
 
     dummy_image1 = np.zeros((100, 100, 3), dtype=np.uint8)
     dummy_image2 = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -90,13 +88,17 @@ def test_matchDescriptor_many_keypoints():
     )
 
     features1 = Features(
-        keypoints=np.array([[0, 0], [1, 1], [3, 3], [45, 40], [0, 50], [20, 80]]),
-        descriptors=descriptors1,
+        keypoints=np.array(
+            [[0, 0], [1, 1], [3, 3], [45, 40], [0, 50], [20, 80]]
+        ).reshape(-1, 2, 1),
     )
     features2 = Features(
-        keypoints=np.array([[0, 0], [1, 1], [60, 0], [0, 10], [34, 34], [10, 10]]),
-        descriptors=descriptors2,
+        keypoints=np.array(
+            [[0, 0], [1, 1], [60, 0], [0, 10], [34, 34], [10, 10]]
+        ).reshape(-1, 2, 1),
     )
+    features1.descriptors = descriptors1
+    features2.descriptors = descriptors2
 
     dummy_image1 = np.zeros((100, 100, 3), dtype=np.uint8)
     dummy_image2 = np.zeros((100, 100, 3), dtype=np.uint8)
