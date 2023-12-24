@@ -23,33 +23,38 @@ from vo.sensors import Camera
 
 
 fig = plt.figure()
+fig.suptitle("Camera Trajectory", fontsize=16)
+
 ax = fig.add_subplot(1, 1, 1)
 plt.ion()
 plt.pause(1.0e-6)
 plt.show()
 
-pc_visualizer = PointCloudVisualizer()
+# pc_visualizer = PointCloudVisualizer()
 
 TRACKER_MODE = "harris"
 DATA_SET = "kitti"
 
 
-def plot_trajectory(trajectory):
+def plot_trajectory_with_landmarks(trajectory, landmarks):
     t_vec = trajectory[:, :3, 3]
 
     # Extract x, y, z coordinates from the trajectory
     x = t_vec[:, 0]
-    # y = t_vec[:, 1]
+    y = t_vec[:, 1]
     z = t_vec[:, 2]
 
     # Plot the camera trajectory
     ax.clear()
     ax.plot(x, z, marker="o")
+    ax.scatter(landmarks[:, 0], landmarks[:, 2], marker="x", color="orange")
 
     ax.set_xlabel("X-axis")
     # ax.set_ylabel("Y-axis")
     ax.set_ylabel("Z-axis")
-    ax.set_title("Camera Trajectory")
+    ax.set_title(
+        f"(X, Y, Z) = ({x[-1]:.1f}, {y[-1]:.1f}, {z[-1]:.1f}), Landmarks: {len(landmarks)}"
+    )
 
     # fix the scaling of the axes
     ax.set_aspect("equal", adjustable="box")
@@ -60,6 +65,10 @@ def plot_trajectory(trajectory):
 def main():
     # Load sequence
     sequence = Sequence(DATA_SET)
+
+    # Skipt to first curve
+    # for _ in range(50):
+    #     next(sequence)
 
     # 4x4 array, zero rotation and translation vector at origin
     current_pose = np.eye(4)
@@ -92,7 +101,7 @@ def main():
 
     # Bootstrapping triangulation
     M, landmarks, inliers = triangulator.triangulate_matches(matches)
-    pc_visualizer.visualize_points(landmarks[inliers])
+    # pc_visualizer.visualize_points(landmarks[inliers])
 
     outliers = np.zeros(shape=(matches.frame2.features.length,), dtype=bool)
     outliers[matches.frame2.features.match_inliers] = ~inliers
@@ -106,6 +115,14 @@ def main():
     inliers_mask[matches.frame2.features.matched_candidate_inliers] = inliers
     state.update_with_local_landmarks(landmarks[inliers], inliers_mask)
     state.reset_outliers(outliers)
+
+    # Initialize trajectory plot
+    trajectory.append(np.eye(4))
+    trajectory.append(state.get_pose())
+    plot_trajectory_with_landmarks(
+        np.array(trajectory),
+        state.curr_frame.features.triangulated_inliers_landmarks,
+    )
 
     # Queue to store last [maxlen] FPS
     fps_queue = deque([], maxlen=5)
@@ -132,6 +149,13 @@ def main():
         state.reset_outliers(outliers)  # before computing candidates reset all outliers
         state.compute_candidates()
 
+        assert np.sum(state.curr_frame.features.candidate_mask) <= np.sum(
+            state.curr_frame.features.matched_candidate_inliers
+        )
+
+        # Plot keypoints here because afterwards we triangulate all of them anyways
+        img = plot_keypoints(new_frame.image, new_frame.features)
+        img = display_keypoints_info(img, new_frame.features)
         # match_img = plot_matches(matches)
 
         # Triangulate new landmarks
@@ -145,26 +169,26 @@ def main():
             state.update_with_world_landmarks(
                 landmarks_world, matches.frame2.features.candidate_mask
             )
-            pc_visualizer.visualize_points(landmarks_world)
+            # pc_visualizer.visualize_points(landmarks_world)
 
         # Update the trajectory array
         trajectory.append(state.get_pose())
-        pc_visualizer.visualize_camera(
-            camera=Camera(matches.frame2.intrinsics, R=rmatrix, t=tvec)
-        )
+        # pc_visualizer.visualize_camera(
+        #     camera=Camera(matches.frame2.intrinsics, R=rmatrix, t=tvec)
+        # )
 
         if len(trajectory) > 0:
             # Plot the trajectory every 5 frames
             # if frame2.get_frame_id() % 5 == 0:
-            plot_trajectory(np.array(trajectory))
+            plot_trajectory_with_landmarks(
+                np.array(trajectory),
+                state.curr_frame.features.triangulated_inliers_landmarks,
+            )
 
         # Display the resulting frame
         img, fps_queue = display_fps(
-            image=new_frame.image, start_time=start_time, fps_queue=fps_queue
+            image=img, start_time=start_time, fps_queue=fps_queue
         )
-        # Plot keypoints here because afterwards we triangulate all of them anyways
-        img = plot_keypoints(img, new_frame.features)
-        img = display_keypoints_info(img, new_frame.features)
 
         cv2.imshow("Press esc to stop", img)
         # cv2.imshow("Press esc to stop", match_img)

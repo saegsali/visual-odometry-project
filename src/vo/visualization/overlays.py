@@ -49,8 +49,10 @@ def display_keypoints_info(image: np.array, features: Features) -> np.array:
         np.array: The image with the keypoint properties overlay.
     """
     n_keypoints = features.length
-    n_matched = len(features.matched_candidate_inliers_keypoints)
-    n_triangulated = len(features.triangulated_inliers_keypoints)
+    n_matched = np.sum(features.matched_candidate_inliers)
+    n_triangulated = np.sum(features.candidate_mask)
+
+    assert not np.any((features.candidate_mask & ~features.matched_candidate_inliers))
 
     cv2.putText(
         image,

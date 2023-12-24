@@ -5,7 +5,7 @@ from vo.sensors import Camera
 
 
 class State:
-    def __init__(self, initial_frame: Frame, bearing_threshold: float = 0.05) -> None:
+    def __init__(self, initial_frame: Frame, bearing_threshold: float = 0.005) -> None:
         self.curr_pose = np.eye(4)
         self.curr_frame = initial_frame
 
