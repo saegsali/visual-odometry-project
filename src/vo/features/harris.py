@@ -258,7 +258,8 @@ class HarrisCornerDetector:
                     used[m.trainIdx] = 1
 
         # create and return Matches object with the extracted matches
-        matches = Matches(frame1, frame2, np.stack(good))
+        m = np.stack(good) if len(good) > 0 else np.empty(shape=(0, 2), dtype=int)
+        matches = Matches(frame1, frame2, m)
 
         return matches
 

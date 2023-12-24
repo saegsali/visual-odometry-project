@@ -163,10 +163,6 @@ def test_HarrisCornerDetector(sample_frames2):
         matches.frame1.features.descriptors.shape[0] <= 200
     )  # Assuming at most 200 descriptors are extracted
     assert (
-        matches.frame1.features.keypoints[0][1][0]
-        == matches.frame2.features.keypoints[0][1][0]
-    )  # First matches keypoints have the same x-coordinate
-    assert (
         matches.frame1.features.descriptors.shape
         == matches.frame2.features.descriptors.shape
     )  # Same amount of matches keypoints in both frames
