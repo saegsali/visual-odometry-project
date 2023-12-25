@@ -18,10 +18,10 @@ class HarrisCornerDetector:
         frame: Frame = None,
         patch_size: int = 9,
         kappa: float = 0.08,
-        num_keypoints: int = 500,
+        num_keypoints: int = 1000,
         nonmaximum_supression_radius: int = 5,
         descriptor_radius: int = 9,
-        match_lambda: float = 5.0,
+        match_lambda: float = 4.0,
     ):
         """Initialize feature matcher and set parameters."""
         self._frame1 = frame
@@ -204,45 +204,62 @@ class HarrisCornerDetector:
             matches (Matches): object containing the matching freature points of the frames.
         """
         # descriptors should have shape (nr_of_keypoints, size_of_descriptor)
-        descriptors1 = frame1.features.descriptors
-        descriptors2 = frame2.features.descriptors
-        num_desc1 = descriptors1.shape[0]
-        num_desc2 = descriptors2.shape[0]
+        descriptors1 = frame1.features.descriptors.astype(np.float32)
+        descriptors2 = frame2.features.descriptors.astype(np.float32)
 
-        # compute euclidean distance of every descriptor pair
-        dists = cdist(
-            descriptors1.reshape([num_desc1, -1]),
-            descriptors2.reshape([num_desc2, -1]),
-            "euclidean",
-        )
-        min_non_zero_dist = np.min(dists)
-        threshold = self._match_lambda * min_non_zero_dist
+        num_desc1 = len(descriptors1)
+        num_desc2 = len(descriptors2)
 
-        # look for best matches (min distance) and set to -1 if dist > threshold
-        best_matches = np.argmin(dists, axis=1)
+        # # compute euclidean distance of every descriptor pair
+        # dists = cdist(
+        #     descriptors1.reshape([num_desc1, -1]),
+        #     descriptors2.reshape([num_desc2, -1]),
+        #     "euclidean",
+        # )
+        # min_non_zero_dist = np.min(dists)
+        # threshold = self._match_lambda * min_non_zero_dist
 
-        dists = dists[np.arange(best_matches.shape[0]), best_matches]
-        best_matches[dists >= threshold] = -1
+        # # look for best matches (min distance) and set to -1 if dist > threshold
+        # best_matches = np.argmin(dists, axis=1)
 
-        # remove double matches
-        unique_matches = np.ones_like(best_matches) * -1
-        _, unique_match_idxs = np.unique(best_matches, return_index=True)
-        unique_matches[unique_match_idxs] = best_matches[unique_match_idxs]
+        # dists = dists[np.arange(best_matches.shape[0]), best_matches]
+        # best_matches[dists >= threshold] = -1
 
-        # get the row indices and stack them horizontally with the matches
-        row_indices = np.indices(unique_matches.shape)
-        matches_pairs = np.hstack(
-            (row_indices.reshape(-1, 1), unique_matches.reshape(-1, 1))
-        )
+        # # remove double matches
+        # unique_matches = np.ones_like(best_matches) * -1
+        # _, unique_match_idxs = np.unique(best_matches, return_index=True)
+        # unique_matches[unique_match_idxs] = best_matches[unique_match_idxs]
 
-        # create a boolean mask for rows where any number is smaller than 0
-        mask = (matches_pairs < 0).any(axis=1)
+        # # get the row indices and stack them horizontally with the matches
+        # row_indices = np.indices(unique_matches.shape)
+        # matches_pairs = np.hstack(
+        #     (row_indices.reshape(-1, 1), unique_matches.reshape(-1, 1))
+        # )
 
-        # use the mask to filter out rows with entries <0
-        matches_pairs_filtered = matches_pairs[~mask]
+        # # create a boolean mask for rows where any number is smaller than 0
+        # mask = (matches_pairs < 0).any(axis=1)
+
+        # # use the mask to filter out rows with entries <0
+        # matches_pairs_filtered = matches_pairs[~mask]
+        # matches = Matches(frame1, frame2, matches_pairs_filtered)
+
+        # Alternative: use ratio test
+        bf = cv2.BFMatcher()
+        matches = bf.knnMatch(descriptors1, descriptors2, k=2)
+        # Apply ratio test
+        good = []
+
+        used = np.zeros(shape=(len(descriptors1)))
+
+        for m, n in matches:
+            if m.distance < 0.75 * n.distance:
+                if used[m.trainIdx] == 0:
+                    good.append([m.queryIdx, m.trainIdx])
+                    used[m.trainIdx] = 1
 
         # create and return Matches object with the extracted matches
-        matches = Matches(frame1, frame2, matches_pairs_filtered)
+        m = np.stack(good) if len(good) > 0 else np.empty(shape=(0, 2), dtype=int)
+        matches = Matches(frame1, frame2, m)
 
         return matches
 

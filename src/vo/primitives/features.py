@@ -11,15 +11,27 @@ class Features:
         """Initializes a features object.
 
         Args:
-            keypoints (np.ndarray): array of keypoints pixel locations, shape = (N, 2).
+            keypoints (np.ndarray): array of keypoints pixel locations, shape = (N, 2, 1).
             descriptors (np.ndarray, optional): array of keypoints descriptors, shape = (N, D). Defaults to None.
         """
         super().__init__()
+
+        assert keypoints.ndim == 3 and keypoints.shape[1:] == (
+            2,
+            1,
+        ), "Invalid shape for keypoints"
+
         n_keypoints = keypoints.shape[0]
         self._keypoints = keypoints
 
         # Use setter methods for all other properties to ensure consistency
         self.descriptors = None
+
+        if landmarks is not None:
+            assert landmarks.ndim == 3 and landmarks.shape[1:] == (
+                3,
+                1,
+            ), "Invalid shape for landmarks"
 
         self.landmarks = (
             landmarks
@@ -32,8 +44,10 @@ class Features:
 
         self._uids = uids
 
-        self._tracks = np.nan * np.ones(shape=(n_keypoints, 2, 1))
-        self._poses = np.nan * np.ones(shape=(n_keypoints, 4, 4))
+        self._tracks = self._keypoints.copy()  # default: new track starts at keypoint
+        self._poses = np.stack(
+            [np.eye(4)] * self._keypoints.shape[0]
+        )  # default: unkown pose
 
         self._candidate_mask = np.zeros(shape=(n_keypoints,)).astype(bool)
 
@@ -204,3 +218,18 @@ class Features:
         ), "Unequal number of state and keypoints."
 
         return self._keypoints.shape[0]
+
+    def set_pose_for_new_tracks(self, pose: np.ndarray) -> None:
+        """Sets a pose for all keypoints which start a new track.
+
+        Args:
+            pose (np.ndarray): Pose to set as start of track.
+        """
+        assert np.all(np.isnan(self.poses[self.state == 0]))
+        assert pose.shape == (4, 4) or (
+            pose.ndim == 3
+            and pose.shape[1:] == (4, 4)
+            and pose.shape[0] == np.sum(self.state == 0)
+        ), "Invlaid shape for pose"
+
+        self._poses[self.state == 0] = pose

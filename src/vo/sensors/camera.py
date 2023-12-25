@@ -1,6 +1,6 @@
 import numpy as np
 
-from vo.helpers import to_cartesian_coordinates
+from vo.helpers import to_cartesian_coordinates, to_homogeneous_coordinates
 
 
 class Camera:
@@ -33,7 +33,7 @@ class Camera:
         :return: The focal length in the x direction.
         """
         assert self.R is not None and self.t is not None, "Camera pose not set"
-        return self.intrinsic_matrix[0, 0] @ np.hstack((self.R, self.t))
+        return self.intrinsic_matrix @ np.hstack((self.R, self.t))
 
     def distort_points(self, points: np.ndarray) -> np.ndarray:
         """
@@ -76,6 +76,20 @@ class Camera:
         """
         projections_hom = self.intrinsic_matrix[np.newaxis] @ points_3d
         return to_cartesian_coordinates(projections_hom)
+
+    def to_normalized_image_coordinates(self, points_2d: np.ndarray) -> np.ndarray:
+        """Converts 2D points in image plane to normalized image coordinates
+
+        Args:
+            points_2d (np.ndarray): An array of 2D points in image plane, shape = (N,2,1)
+
+        Returns:
+            np.ndarray: Normalized image coordinates, shape = (N,3,1)
+        """
+        points = to_homogeneous_coordinates(points_2d)
+        norm_points = np.linalg.inv(self.intrinsic_matrix) @ points
+        assert np.allclose(norm_points[:, -1], 1), "Normalization not successful"
+        return norm_points
 
     @property
     def c_T_w(self) -> np.ndarray:
