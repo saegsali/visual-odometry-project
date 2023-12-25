@@ -53,6 +53,7 @@ def camera2() -> Camera:
 def pose_estimator(camera2) -> P3PPoseEstimator:
     return P3PPoseEstimator(
         intrinsic_matrix=camera2.intrinsic_matrix,
+        use_opencv=False,
         inlier_threshold=1,
         outlier_ratio=0.9,
         confidence=0.99,

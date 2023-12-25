@@ -80,9 +80,16 @@ def main():
     camera = sequence.get_camera()
 
     triangulator = LandmarksTriangulator(
-        camera1=camera, camera2=camera, use_opencv=True
+        camera1=camera,
+        camera2=camera,
+        use_ransac=True,
+        use_opencv=True,
+        outlier_ratio=0.9,
+        ransac_threshold=3.0,
+        ransac_confidence=0.99,
     )
     pose_estimator = P3PPoseEstimator(
+        use_opencv=False,
         intrinsic_matrix=camera.intrinsic_matrix,
         inlier_threshold=3,
         outlier_ratio=0.9,
