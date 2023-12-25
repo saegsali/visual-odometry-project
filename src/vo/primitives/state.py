@@ -131,11 +131,11 @@ class State:
         Args:
             outliers (np.ndarray): outlier mask for all keypoints
         """
-        self.curr_frame.features.state[outliers] == 0  # unmatched state
-        self.curr_frame.features.tracks[outliers] == self.curr_frame.features.keypoints[
+        self.curr_frame.features.state[outliers] = 0  # unmatched state
+        self.curr_frame.features.tracks[outliers] = self.curr_frame.features.keypoints[
             outliers
         ]
-        self.curr_frame.features.poses[outliers] == self.curr_pose
+        self.curr_frame.features.poses[outliers] = self.curr_pose
 
     def _calculate_bearing_angle(
         self,
