@@ -149,7 +149,7 @@ def test_HarrisCornerDetector(sample_frames2):
     harris = HarrisCornerDetector(frame1, num_keypoints=200)
 
     # Match features
-    matches = harris.featureMatcher(frame2)
+    matches = harris.featureMatcher(frame1, frame2)
 
     # Ensure that the result is of type Matches
     assert isinstance(matches, Matches)
