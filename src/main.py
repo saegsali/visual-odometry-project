@@ -34,6 +34,7 @@ plt.show()
 
 TRACKER_MODE = "harris"
 DATA_SET = "kitti"
+SHOW_N_POSES = 50
 
 
 def plot_trajectory_with_landmarks(trajectory, landmarks):
@@ -176,7 +177,8 @@ def main():
         # pc_visualizer.visualize_camera(
         #     camera=Camera(matches.frame2.intrinsics, R=rmatrix, t=tvec)
         # )
-
+        if len(trajectory) > SHOW_N_POSES:
+            trajectory.pop(0)
         if len(trajectory) > 0:
             # Plot the trajectory every 5 frames
             # if frame2.get_frame_id() % 5 == 0:
