@@ -79,12 +79,24 @@ class State:
 
         self.curr_frame.features.landmarks[keypoints_mask] = landmarks
         self.curr_frame.features.state[keypoints_mask] = 2  # set to triangulated
+        self._check_landmarks()
 
         assert not np.any(
             np.isnan(
                 self.curr_frame.features.landmarks[self.curr_frame.features.state == 2]
             )
         ), "NaN in triangulated landmarks"
+
+    def _check_landmarks(self) -> None:
+        # check if a landmark is behind the camera or not
+        # convert landmarks to camera coordinates
+        camera_landmarks = to_cartesian_coordinates(
+            self.curr_pose
+            @ to_homogeneous_coordinates(self.curr_frame.features.landmarks)
+        )
+        outliers = camera_landmarks[:, 2].flatten() < 0
+        self.curr_frame.features.landmarks[outliers] = np.nan
+        self.reset_outliers(outliers)
 
     def get_frame(self) -> Frame:
         return self.curr_frame
