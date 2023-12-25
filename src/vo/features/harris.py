@@ -47,7 +47,7 @@ class HarrisCornerDetector:
         else:
             return cv2.cvtColor(self._frame2.image, cv2.COLOR_BGR2GRAY)
 
-    def featureMatcher(self, frame: Frame) -> Matches:
+    def featureMatcher(self, curr_frame: Frame, new_frame: Frame) -> Matches:
         """Track features of 2 frames using the Harris corner detector algorithm.
 
         Args:
@@ -58,8 +58,8 @@ class HarrisCornerDetector:
         """
 
         # Update the frame
-        self._frame1 = self._frame2
-        self._frame2 = frame
+        self._frame1 = curr_frame
+        self._frame2 = new_frame
 
         # self._frame1 = frame1
         # self._frame2 = frame2

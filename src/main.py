@@ -97,7 +97,7 @@ def main():
     new_frame = next(sequence)
 
     tracker = Tracker(init_frame, mode=TRACKER_MODE)
-    matches = tracker.trackFeatures(new_frame)
+    matches = tracker.trackFeatures(state.curr_frame, new_frame)
     state.update_from_matches(matches)
 
     # Bootstrapping triangulation
@@ -132,7 +132,7 @@ def main():
         # Variable for calculating FPS
         start_time = time.time()
 
-        matches = tracker.trackFeatures(new_frame)
+        matches = tracker.trackFeatures(state.curr_frame, new_frame)
 
         (rmatrix, tvec), inliers = pose_estimator.estimate_pose(
             Features(

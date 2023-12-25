@@ -51,13 +51,13 @@ class Tracker:
             case other:
                 raise Exception("Tracker Name not valid")
 
-    def trackFeatures(self, frame: Frame) -> Matches:
+    def trackFeatures(self, curr_frame: Frame, new_frame: Frame) -> Matches:
         match self._mode:
             case "klt":
-                return self._tracker.track_features(frame)
+                return self._tracker.track_features(curr_frame, new_frame)
             case "harris":
-                return self._tracker.featureMatcher(frame)
+                return self._tracker.featureMatcher(curr_frame, new_frame)
             case "sift":
-                return self._tracker.get_sift_matches(frame)
+                return self._tracker.get_sift_matches(curr_frame, new_frame)
             case other:
                 raise Exception("Tracker Name not valid")
