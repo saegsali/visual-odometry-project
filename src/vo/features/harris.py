@@ -18,10 +18,10 @@ class HarrisCornerDetector:
         frame: Frame = None,
         patch_size: int = 9,
         kappa: float = 0.08,
-        num_keypoints: int = 200,
+        num_keypoints: int = 1000,
         nonmaximum_supression_radius: int = 5,
         descriptor_radius: int = 9,
-        match_lambda: float = 5.0,
+        match_lambda: float = 4.0,
     ):
         """Initialize feature matcher and set parameters."""
         self._frame1 = frame
@@ -47,13 +47,7 @@ class HarrisCornerDetector:
         else:
             return cv2.cvtColor(self._frame2.image, cv2.COLOR_BGR2GRAY)
 
-    def to_gray(self, frame) -> Frame:
-        """Converts the image to a grayscale image."""
-        img = frame.image
-        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        return Frame(gray_img, features=frame.features)
-
-    def featureMatcher(self, frame: Frame) -> Matches:
+    def featureMatcher(self, curr_frame: Frame, new_frame: Frame) -> Matches:
         """Track features of 2 frames using the Harris corner detector algorithm.
 
         Args:
@@ -64,8 +58,8 @@ class HarrisCornerDetector:
         """
 
         # Update the frame
-        self._frame1 = self._frame2
-        self._frame2 = frame
+        self._frame1 = curr_frame
+        self._frame2 = new_frame
 
         # self._frame1 = frame1
         # self._frame2 = frame2
@@ -75,8 +69,9 @@ class HarrisCornerDetector:
         self._frame2.image = self.img2_gray
 
         # Extract keypoints from the frames
-        self._frame1 = self.extractKeypoints(self._frame1)
-        self._frame1 = self.extractDescriptors(self._frame1)
+        if self._frame1.features is None:
+            self._frame1 = self.extractKeypoints(self._frame1)
+            self._frame1 = self.extractDescriptors(self._frame1)
 
         # Extract descriptors from the frames
         self._frame2 = self.extractKeypoints(self._frame2)
@@ -88,7 +83,7 @@ class HarrisCornerDetector:
 
         return matches
 
-    def extractKeypoints(self, frame) -> Frame:
+    def extractKeypoints(self, frame: Frame) -> Frame:
         """Calculates the harris scores for an image given a patch size and a kappa value
         Selects the best scores as keypoints and performs non-maximum supression of a (2r + 1)*(2r + 1) box around
         the current maximum.
@@ -156,13 +151,13 @@ class HarrisCornerDetector:
 
             kp[i, :, :] = np.array([[w_max], [h_max]])
 
-        # Init Frame with keypoints
-        kp_feature = Features(kp)
-        keypoints = Frame(img, kp_feature)
+        # Change Frame with keypoints
+        assert frame.features is None, "Frame already has features"
+        frame.features = Features(kp)
 
-        return keypoints
+        return frame
 
-    def extractDescriptors(self, frame) -> Frame:
+    def extractDescriptors(self, frame: Frame) -> Frame:
         """
         Returns a Frame with a N x (2*r+1)^2 x 1 matrix of image patch vectors describing the extracted keypoints of the Frame.
         r is the descriptor_radius.
@@ -194,12 +189,11 @@ class HarrisCornerDetector:
             desc[kp, :, :] = patch.reshape(-1, 1)
 
         # Init Frame with keypoints and descriptors
-        desc_feature = Features(keypoints, desc)
-        descriptors = Frame(img, desc_feature)
+        frame.features.descriptors = desc
 
-        return descriptors
+        return frame
 
-    def matchDescriptor(self, frame1, frame2) -> Matches:
+    def matchDescriptor(self, frame1: Frame, frame2: Frame) -> Matches:
         """Matches the features of two frames based on their descriptors.
 
         Args:
@@ -210,45 +204,62 @@ class HarrisCornerDetector:
             matches (Matches): object containing the matching freature points of the frames.
         """
         # descriptors should have shape (nr_of_keypoints, size_of_descriptor)
-        descriptors1 = frame1.features.descriptors
-        descriptors2 = frame2.features.descriptors
-        num_desc1 = descriptors1.shape[0]
-        num_desc2 = descriptors2.shape[0]
+        descriptors1 = frame1.features.descriptors.astype(np.float32)
+        descriptors2 = frame2.features.descriptors.astype(np.float32)
 
-        # compute euclidean distance of every descriptor pair
-        dists = cdist(
-            descriptors1.reshape([num_desc1, -1]),
-            descriptors2.reshape([num_desc2, -1]),
-            "euclidean",
-        )
-        min_non_zero_dist = np.min(dists)
-        threshold = self._match_lambda * min_non_zero_dist
+        num_desc1 = len(descriptors1)
+        num_desc2 = len(descriptors2)
 
-        # look for best matches (min distance) and set to -1 if dist > threshold
-        best_matches = np.argmin(dists, axis=1)
+        # # compute euclidean distance of every descriptor pair
+        # dists = cdist(
+        #     descriptors1.reshape([num_desc1, -1]),
+        #     descriptors2.reshape([num_desc2, -1]),
+        #     "euclidean",
+        # )
+        # min_non_zero_dist = np.min(dists)
+        # threshold = self._match_lambda * min_non_zero_dist
 
-        dists = dists[np.arange(best_matches.shape[0]), best_matches]
-        best_matches[dists >= threshold] = -1
+        # # look for best matches (min distance) and set to -1 if dist > threshold
+        # best_matches = np.argmin(dists, axis=1)
 
-        # remove double matches
-        unique_matches = np.ones_like(best_matches) * -1
-        _, unique_match_idxs = np.unique(best_matches, return_index=True)
-        unique_matches[unique_match_idxs] = best_matches[unique_match_idxs]
+        # dists = dists[np.arange(best_matches.shape[0]), best_matches]
+        # best_matches[dists >= threshold] = -1
 
-        # get the row indices and stack them horizontally with the matches
-        row_indices = np.indices(unique_matches.shape)
-        matches_pairs = np.hstack(
-            (row_indices.reshape(-1, 1), unique_matches.reshape(-1, 1))
-        )
+        # # remove double matches
+        # unique_matches = np.ones_like(best_matches) * -1
+        # _, unique_match_idxs = np.unique(best_matches, return_index=True)
+        # unique_matches[unique_match_idxs] = best_matches[unique_match_idxs]
 
-        # create a boolean mask for rows where any number is smaller than 0
-        mask = (matches_pairs < 0).any(axis=1)
+        # # get the row indices and stack them horizontally with the matches
+        # row_indices = np.indices(unique_matches.shape)
+        # matches_pairs = np.hstack(
+        #     (row_indices.reshape(-1, 1), unique_matches.reshape(-1, 1))
+        # )
 
-        # use the mask to filter out rows with entries <0
-        matches_pairs_filtered = matches_pairs[~mask]
+        # # create a boolean mask for rows where any number is smaller than 0
+        # mask = (matches_pairs < 0).any(axis=1)
+
+        # # use the mask to filter out rows with entries <0
+        # matches_pairs_filtered = matches_pairs[~mask]
+        # matches = Matches(frame1, frame2, matches_pairs_filtered)
+
+        # Alternative: use ratio test
+        bf = cv2.BFMatcher()
+        matches = bf.knnMatch(descriptors1, descriptors2, k=2)
+        # Apply ratio test
+        good = []
+
+        used = np.zeros(shape=(len(descriptors1)))
+
+        for m, n in matches:
+            if m.distance < 0.75 * n.distance:
+                if used[m.trainIdx] == 0:
+                    good.append([m.queryIdx, m.trainIdx])
+                    used[m.trainIdx] = 1
 
         # create and return Matches object with the extracted matches
-        matches = Matches(frame1, frame2, matches_pairs_filtered)
+        m = np.stack(good) if len(good) > 0 else np.empty(shape=(0, 2), dtype=int)
+        matches = Matches(frame1, frame2, m)
 
         return matches
 
@@ -262,7 +273,9 @@ if __name__ == "__main__":
     frame2 = sequence.get_frame(0)
 
     # Create an instance of the HarrisCornerDetector class
-    harris = HarrisCornerDetector(frame2, match_lambda=5, nonmaximum_supression_radius=5)
+    harris = HarrisCornerDetector(
+        frame2, match_lambda=5, nonmaximum_supression_radius=5
+    )
 
     for i in range(1, len(sequence)):
         frame1 = frame2

@@ -35,50 +35,59 @@ class LandmarksTriangulator:
 
         self._use_opencv = use_opencv
 
-    def triangulate_matches_with_relative_pose(
-        self, matches: Matches, T: np.ndarray
+    def triangulate_candidates(
+        self, features: Features, current_pose: np.ndarray
     ) -> np.ndarray:
-        """Triangulate the 3D position of landmarks using matches from two frames as well as the relative pose between them.
+        """Triangulate the 3D position of landmarks using start and end point of a track as well as the relative pose between them.
 
         Args:
-            matches (Matches): object containing the matches of each frame.
-            T (np.ndarray): 4x4 matrix which transforms coordinates from camera frame 1 to camera frame 2.
+            features (Features): object containing the keypoints and tracks.
+            current_pose (np.ndarray): the current pose, shape = (4,4)
 
         Returns:
-            np.ndarray: array of 3D landmark positions in coordinates of frame 1, shape = (N, 3, 1).
+            np.ndarray: array of 3D landmark positions in world coordinates, shape = (N, 3, 1).
         """
-        points1 = to_homogeneous_coordinates(matches.frame1.features.keypoints)
-        points2 = to_homogeneous_coordinates(matches.frame2.features.keypoints)
+        points_start = features.tracks[features.candidate_mask]
+        points_end = features.keypoints[features.candidate_mask]
 
-        # Construct linear equations
-        # l1 * p1 = K1 @ P
-        # l2 * p2 = K2 @ T @ P = K2 @ (R @ P + t)
+        extrinsics_start = np.linalg.inv(features.poses[features.candidate_mask])[:, :3]
+        extrinsics_end = np.linalg.inv(current_pose)[:3]
 
-        # Construct matrix A
-        R_inv = np.linalg.inv(T[:3, :3])
-        K1_inv = np.linalg.inv(self.camera1.intrinsic_matrix)
-        K2_inv = np.linalg.inv(self.camera2.intrinsic_matrix)
+        proj1 = self.camera1.intrinsic_matrix @ extrinsics_start
+        proj2 = self.camera2.intrinsic_matrix @ extrinsics_end
 
-        A1 = K1_inv @ points1
-        A2 = R_inv @ K2_inv @ points2
-        A = np.concatenate(
-            [
-                A1,
-                -A2,
-            ],
-            axis=-1,
-        )
-        b = -R_inv @ T[:3, 3:]
+        P_open = []
 
-        # Solve overconstrained system
-        lambdas = np.linalg.solve(
-            np.matmul(A.transpose(0, 2, 1), A), (A.transpose(0, 2, 1) @ b)
-        )
-        l0 = lambdas[:, 0].reshape(-1, 1, 1)
+        for i in range(points_start.shape[0]):
+            P_open.append(
+                cv2.triangulatePoints(
+                    projMatr1=proj1[i],  # all have different start pose
+                    projMatr2=proj2,  # all have same end pose
+                    projPoints1=points_start[i].reshape(-1, 2).T,
+                    projPoints2=points_end[i].reshape(-1, 2).T,
+                ).T
+            )
 
-        # Recover P
-        P = l0 * A1
-        return P
+        P_open = np.concatenate(P_open)
+        P_open = P_open.reshape(-1, 4, 1)
+
+        # proj1 = self.camera1.intrinsic_matrix @ extrinsics_start
+        # proj2 = self.camera2.intrinsic_matrix @ extrinsics_end
+
+        # A = np.concatenate(
+        #     [
+        #         to_skew_symmetric_matrix(to_homogeneous_coordinates(points_start))
+        #         @ proj1,
+        #         to_skew_symmetric_matrix(to_homogeneous_coordinates(points_end))
+        #         @ proj2.reshape(1, 3, 4),
+        #     ],
+        #     axis=1,
+        # )
+
+        # U, S, Vh = np.linalg.svd(A)
+        # P = Vh.T[:, -1].reshape(-1, 4, 1)  # last column of V
+
+        return to_cartesian_coordinates(P_open)
 
     def triangulate_matches(self, matches: Matches) -> np.ndarray:
         """Triangulate the 3D position of landmarks using matches from two frames,
@@ -91,8 +100,8 @@ class LandmarksTriangulator:
             np.ndarray: array of 3D landmark positions in world coordinates, shape = (N, 3, 1).
             np.ndarray: M = [R t] which transforms coordinates from camera frame 1 to camera frame 2, shape = (3, 4).
         """
-        points1 = matches.frame1.features.keypoints
-        points2 = matches.frame2.features.keypoints
+        points1 = matches.frame1.features.matched_candidate_inliers_keypoints
+        points2 = matches.frame2.features.matched_candidate_inliers_keypoints
 
         # Find relative pose
         if self._use_ransac:
@@ -392,7 +401,8 @@ class LandmarksTriangulator:
         """
 
         F, inliers = self._find_fundamental_matrix_ransac(
-            matches.frame1.features.keypoints, matches.frame2.features.keypoints
+            matches.frame1.features.candidate_inliers_keypoints,
+            matches.frame2.features.candidate_inliers_keypoints,
         )
 
         img1 = matches.frame1.image
@@ -400,10 +410,10 @@ class LandmarksTriangulator:
 
         # Compute line parameters in left and right image
         lines1 = F @ to_homogeneous_coordinates(
-            matches.frame1.features.keypoints[inliers]
+            matches.frame1.features.candidate_inliers_keypoints[inliers]
         )
         lines2 = F.T @ to_homogeneous_coordinates(
-            matches.frame2.features.keypoints[inliers]
+            matches.frame2.features.candidate_inliers_keypoints[inliers]
         )  # [a b c] @ [x y 1] = 0 -> y = -a/b * x - c/b
 
         # Draw images next to each other
@@ -481,7 +491,6 @@ if __name__ == "__main__":
     frame1 = next(sequence)
 
     for frame2 in sequence:
-        print(frame2)
         # Create camera
         camera = Camera(
             intrinsic_matrix=np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]])

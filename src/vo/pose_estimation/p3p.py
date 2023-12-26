@@ -14,9 +14,10 @@ class P3PPoseEstimator:
         self,
         intrinsic_matrix: np.ndarray,
         inlier_threshold: float,
+        use_opencv: bool = True,
         outlier_ratio: float = 0.9,
         confidence: float = 0.99,
-        max_iterations: int = np.inf,
+        max_iterations: int = 10000,
     ) -> None:
         """Initializes a P3P pose estimator.
 
@@ -27,6 +28,7 @@ class P3PPoseEstimator:
             confidence (float, optional): Confidence level that all inliers are selected. Defaults to 0.99.
             max_iterations (int, optional): Maximum number of iterations the algorithm should perform before stopping. Defaults to np.inf.
         """
+        self._use_opencv = use_opencv
         self.intrinsic_matrix = intrinsic_matrix
         self.inlier_threshold = inlier_threshold
         self.outlier_ratio = outlier_ratio
@@ -59,6 +61,7 @@ class P3PPoseEstimator:
 
             """
             assert points.shape[0] == 4, "P3P requires 4 point correspondences"
+
             success, rvec, tvec = cv2.solvePnP(
                 np.stack(points[:, 0]),  # landmarks
                 np.stack(points[:, 1]),  # keypoints
@@ -126,9 +129,29 @@ class P3PPoseEstimator:
         """
         points_3d = features.landmarks
         points_2d = features.keypoints
+
+        assert points_3d.shape[1] == 3 and points_2d.shape[1] == 2, "Invalid shape."
         assert (
             points_3d is not None and points_2d is not None
         ), "3D landmarks and 2D keypoints must be provided."
+
+        if self._use_opencv:
+            success, rvec_cv, tvec_cv, inliers_cv = cv2.solvePnPRansac(
+                points_3d,
+                points_2d,
+                self.intrinsic_matrix,
+                None,
+                flags=cv2.SOLVEPNP_P3P,
+                iterationsCount=self.max_iterations,
+                reprojectionError=self.inlier_threshold,
+                confidence=self.confidence,
+            )
+            assert success, "OpenCV P3P failed"
+            rmatrix_cv = cv2.Rodrigues(rvec_cv)[0]
+            inliers_mask = np.zeros(shape=(features.length,), dtype=bool)
+            inliers_mask[inliers_cv] = True
+            return (rmatrix_cv, tvec_cv), inliers_mask
+
         N = features.length
 
         population = np.empty((N, 2), dtype=object)

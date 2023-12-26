@@ -194,6 +194,7 @@ class Sequence:
         frame = Frame(image)
         frame.frame_id = idx
         frame.intrinsics = self.intrinsics
+        frame.sensor = Camera(self.intrinsics)
         return frame
 
     def get_intrinsics(self) -> np.ndarray:
