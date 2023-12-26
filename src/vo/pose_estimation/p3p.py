@@ -1,12 +1,13 @@
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+from scipy.optimize import least_squares
 
 from vo.primitives import Features, Matches, Sequence
 from vo.algorithms import RANSAC
 from vo.sensors import Camera
 from vo.landmarks import LandmarksTriangulator
-from vo.helpers import to_homogeneous_coordinates
+from vo.helpers import to_homogeneous_coordinates, H_matrix_to_twist, twist_to_H_matrix
 
 
 class P3PPoseEstimator:
@@ -18,6 +19,7 @@ class P3PPoseEstimator:
         outlier_ratio: float = 0.9,
         confidence: float = 0.99,
         max_iterations: int = 10000,
+        nonlinear_refinement: bool = True,
     ) -> None:
         """Initializes a P3P pose estimator.
 
@@ -27,6 +29,7 @@ class P3PPoseEstimator:
             outlier_ratio (float, optional): Percentage of estimated outlier points, serves as an upper bound for the adaptive case. Defaults to 0.9.
             confidence (float, optional): Confidence level that all inliers are selected. Defaults to 0.99.
             max_iterations (int, optional): Maximum number of iterations the algorithm should perform before stopping. Defaults to np.inf.
+            nonlinear_refinement (bool, optional): Whether to perform nonlinear refinement. Defaults to True.
         """
         self._use_opencv = use_opencv
         self.intrinsic_matrix = intrinsic_matrix
@@ -34,6 +37,7 @@ class P3PPoseEstimator:
         self.outlier_ratio = outlier_ratio
         self.confidence = confidence
         self.max_iterations = max_iterations
+        self.nonlinear_refinement = nonlinear_refinement
 
         def plot_2Dpoints(points: np.ndarray) -> None:
             fig, ax = plt.subplots()
@@ -150,6 +154,14 @@ class P3PPoseEstimator:
             rmatrix_cv = cv2.Rodrigues(rvec_cv)[0]
             inliers_mask = np.zeros(shape=(features.length,), dtype=bool)
             inliers_mask[inliers_cv] = True
+
+            if self.nonlinear_refinement:
+                rmatrix_cv, tvec_cv = self._nonlinear_refinement(
+                    points_3d[inliers_mask],
+                    points_2d[inliers_mask],
+                    (rmatrix_cv, tvec_cv),
+                )
+
             return (rmatrix_cv, tvec_cv), inliers_mask
 
         N = features.length
@@ -162,8 +174,43 @@ class P3PPoseEstimator:
         # Find best model
         best_model, best_inlier = self.ransac.find_best_model(population=population)
 
+        if self.nonlinear_refinement:
+            rvec, tvec = self._nonlinear_refinement(
+                points_3d[best_inlier],
+                points_2d[best_inlier],
+                best_model,
+            )
+            best_model = (rvec, tvec)
+
         # Return the best p3p model and its inliers
         return best_model, best_inlier
+
+    def _nonlinear_refinement(self, points_3d, points_2d, best_model):
+        # Nonlinear refinement
+        H = np.eye(4)
+        H[:3, :3] = best_model[0]
+        H[:3, 3] = best_model[1].squeeze()
+
+        def error_fn(twist):
+            H_guess = twist_to_H_matrix(twist)
+            R = H_guess[:3, :3]
+            t = H_guess[:3, 3]
+
+            # Compute projected points
+            projected_points, _ = cv2.projectPoints(
+                points_3d, R, t, self.intrinsic_matrix, None
+            )
+
+            residual = np.linalg.norm(
+                points_2d - projected_points.reshape(-1, 2, 1), axis=(1, 2)
+            )
+            return residual
+
+        initial_guess = H_matrix_to_twist(H)
+        result = least_squares(error_fn, x0=initial_guess).x
+
+        H_guess = twist_to_H_matrix(result)
+        return H_guess[:3, :3], H_guess[:3, 3:]
 
 
 if __name__ == "__main__":

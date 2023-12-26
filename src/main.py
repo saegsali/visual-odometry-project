@@ -33,8 +33,8 @@ plt.show()
 # pc_visualizer = PointCloudVisualizer()
 
 TRACKER_MODE = "harris"
-DATA_SET = "kitti"
-SHOW_N_POSES = 50
+DATA_SET = "malaga"
+SHOW_N_POSES = 100
 
 
 def plot_trajectory_with_landmarks(trajectory, landmarks):
@@ -47,7 +47,7 @@ def plot_trajectory_with_landmarks(trajectory, landmarks):
 
     # Plot the camera trajectory
     ax.clear()
-    ax.plot(x, z, marker="o")
+    ax.plot(x, z, marker="o", linewidth=1, markersize=1)
     ax.scatter(landmarks[:, 0], landmarks[:, 2], marker="x", color="orange")
 
     ax.set_xlabel("X-axis")
@@ -94,6 +94,7 @@ def main():
         inlier_threshold=3,
         outlier_ratio=0.9,
         confidence=0.99,
+        nonlinear_refinement=True,
     )
 
     # Perform bootstrapping
