@@ -23,9 +23,12 @@ from vo.sensors import Camera
 
 
 fig = plt.figure()
-fig.suptitle("Camera Trajectory", fontsize=16)
+# fig.suptitle("Camera Trajectory", fontsize=16)
 
-ax = fig.add_subplot(1, 1, 1)
+ax1 = fig.add_subplot(2, 4, (1, 2))
+ax2 = fig.add_subplot(2, 4, (3, 8))
+ax3 = fig.add_subplot(2, 4, 5)
+ax4 = fig.add_subplot(2, 4, 6)
 plt.ion()
 plt.pause(1.0e-6)
 plt.show()
@@ -33,11 +36,52 @@ plt.show()
 # pc_visualizer = PointCloudVisualizer()
 
 TRACKER_MODE = "harris"
-DATA_SET = "malaga"
-SHOW_N_POSES = 100
+DATA_SET = "kitti"
+SHOW_N_POSES = 20
+
+
+def plot_image(img):
+    ax1.clear()
+    ax1.imshow(img[::2, ::2])
+
+    ax1.set_title("Current image", fontsize=8, fontweight="bold")
+    # ax1.get_xaxis().set_visible(False)
+    # ax1.get_yaxis().set_visible(False)
+
+    fig.canvas.draw()
+    fig.canvas.flush_events()
 
 
 def plot_trajectory_with_landmarks(trajectory, landmarks):
+    t_vec = trajectory[-SHOW_N_POSES:, :3, 3]
+
+    # Extract x, y, z coordinates from the trajectory
+    x = t_vec[:, 0]
+    y = t_vec[:, 1]
+    z = t_vec[:, 2]
+
+    # Plot the camera trajectory
+    ax2.clear()
+    ax2.plot(x, z, marker="o", linewidth=1, markersize=1)
+    ax2.scatter(landmarks[:, 0], landmarks[:, 2], marker="x", color="orange")
+
+    # ax2.set_xlabel("X-axis")
+    # ax2.set_ylabel("Z-axis")
+    ax2.set_title(
+        f"Trajectory of last {SHOW_N_POSES} frames and landmarks.",
+        # f"(X, Y, Z) = ({x[-1]:.1f}, {y[-1]:.1f}, {z[-1]:.1f}), Landmarks: {len(landmarks)}",
+        fontsize=8,
+        fontweight="bold",
+    )
+
+    # fix the scaling of the axes
+    ax2.set_aspect("equal", adjustable="box")
+    ax2.set_box_aspect(1.25)
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+
+
+def plot_trajectory(trajectory):
     t_vec = trajectory[:, :3, 3]
 
     # Extract x, y, z coordinates from the trajectory
@@ -46,19 +90,40 @@ def plot_trajectory_with_landmarks(trajectory, landmarks):
     z = t_vec[:, 2]
 
     # Plot the camera trajectory
-    ax.clear()
-    ax.plot(x, z, marker="o", linewidth=1, markersize=1)
-    ax.scatter(landmarks[:, 0], landmarks[:, 2], marker="x", color="orange")
+    ax4.clear()
+    ax4.plot(x, z, marker="o", linewidth=1, markersize=1)
 
-    ax.set_xlabel("X-axis")
-    # ax.set_ylabel("Y-axis")
-    ax.set_ylabel("Z-axis")
-    ax.set_title(
-        f"(X, Y, Z) = ({x[-1]:.1f}, {y[-1]:.1f}, {z[-1]:.1f}), Landmarks: {len(landmarks)}"
+    # ax4.set_xlabel("X-axis")
+    # ax4.set_ylabel("Z-axis")
+    ax4.set_title("Full trajectory.", fontsize=8, fontweight="bold")
+
+    # fix the scaling of the axes
+    ax4.set_aspect("equal", adjustable="box")
+    ax4.set_box_aspect(1.2)
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+
+
+def plot_nr_of_landmarks(nr_of_landmarks):
+    x = np.arange(-SHOW_N_POSES, 0)
+    y = nr_of_landmarks[-SHOW_N_POSES:]
+
+    ax3.clear()
+    ax3.plot(x, y, marker="o", linewidth=1, markersize=1)
+
+    # ax3.set_xlabel("Frame")
+    # ax3.set_ylabel("Nr of Landmarks")
+    ax3.set_title(
+        f"# tracked landmarks over last {SHOW_N_POSES} frames.",
+        fontsize=8,
+        fontweight="bold",
     )
 
     # fix the scaling of the axes
-    ax.set_aspect("equal", adjustable="box")
+    # ax3.set_aspect("equal", adjustable="box")
+    ax3.set_xlim(-20, 0)
+    ax3.set_ylim(0, 500)
+    ax3.set_box_aspect(1.2)
     fig.canvas.draw()
     fig.canvas.flush_events()
 
@@ -77,6 +142,7 @@ def main():
     current_pose[:3, :3] = np.eye(3)
 
     trajectory = []
+    nr_of_landmarks = [0] * SHOW_N_POSES
     camera = sequence.get_camera()
 
     triangulator = LandmarksTriangulator(
@@ -125,13 +191,18 @@ def main():
     state.update_with_local_landmarks(landmarks[inliers], inliers_mask)
     state.reset_outliers(outliers)
 
-    # Initialize trajectory plot
+    # Initialize plots
     trajectory.append(np.eye(4))
     trajectory.append(state.get_pose())
+    nr_of_landmarks.append(
+        len(state.curr_frame.features.triangulated_inliers_landmarks)
+    )
     plot_trajectory_with_landmarks(
         np.array(trajectory),
         state.curr_frame.features.triangulated_inliers_landmarks,
     )
+    plot_trajectory(np.array(trajectory))
+    plot_nr_of_landmarks(np.array(nr_of_landmarks))
 
     # Queue to store last [maxlen] FPS
     fps_queue = deque([], maxlen=5)
@@ -180,32 +251,39 @@ def main():
             )
             # pc_visualizer.visualize_points(landmarks_world)
 
-        # Update the trajectory array
+        # Update the trajectory and nr of landmarks arrays
         trajectory.append(state.get_pose())
+        nr_of_landmarks.append(
+            len(state.curr_frame.features.triangulated_inliers_landmarks)
+        )
         # pc_visualizer.visualize_camera(
         #     camera=Camera(matches.frame2.intrinsics, R=rmatrix, t=tvec)
         # )
-        if len(trajectory) > SHOW_N_POSES:
-            trajectory.pop(0)
+
+        # if len(trajectory) > SHOW_N_POSES:
+        #     trajectory.pop(0)
+        if len(nr_of_landmarks) > SHOW_N_POSES:
+            nr_of_landmarks.pop(0)
         if len(trajectory) > 0:
-            # Plot the trajectory every 5 frames
-            # if frame2.get_frame_id() % 5 == 0:
             plot_trajectory_with_landmarks(
                 np.array(trajectory),
                 state.curr_frame.features.triangulated_inliers_landmarks,
             )
+            plot_trajectory(np.array(trajectory))
+            plot_nr_of_landmarks(np.array(nr_of_landmarks))
 
-        # Display the resulting frame
-        img, fps_queue = display_fps(
-            image=img, start_time=start_time, fps_queue=fps_queue
-        )
+            # Display the resulting frame
+            img, fps_queue = display_fps(
+                image=img, start_time=start_time, fps_queue=fps_queue
+            )
+            plot_image(img)
 
-        cv2.imshow("Press esc to stop", img)
+        # cv2.imshow("Press esc to stop", img)
         # cv2.imshow("Press esc to stop", match_img)
 
-        k = cv2.waitKey(5) & 0xFF  # 30ms delay -> try lower value for more FPS :)
-        if k == 27:
-            break
+        # k = cv2.waitKey(5) & 0xFF  # 30ms delay -> try lower value for more FPS :)
+        # if k == 27:
+        #     break
 
 
 if __name__ == "__main__":
