@@ -233,3 +233,31 @@ class Features:
         ), "Invlaid shape for pose"
 
         self._poses[self.state == 0] = pose
+
+    def mask(self, mask: np.ndarray) -> None:
+        """Masks features object.
+        Args:
+            mask (np.ndarray): Boolean mask to apply.
+        """
+        assert mask.shape == (self.length,), "Invalid mask shape"
+
+        if self._keypoints is not None:
+            self._keypoints = self._keypoints[mask]
+
+        if self._state is not None:
+            self._state = self._state[mask]
+
+        if self._landmarks is not None:
+            self._landmarks = self._landmarks[mask]
+
+        if self._uids is not None:
+            self._uids = self._uids[mask]
+
+        if self._tracks is not None:
+            self._tracks = self._tracks[mask]
+
+        if self._poses is not None:
+            self._poses = self._poses[mask]
+
+        if self._candidate_mask is not None:
+            self._candidate_mask = self._candidate_mask[mask]
