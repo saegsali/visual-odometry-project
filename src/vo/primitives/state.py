@@ -90,11 +90,17 @@ class State:
     def _check_landmarks(self) -> None:
         # check if a landmark is behind the camera or not
         # convert landmarks to camera coordinates
-        camera_landmarks = to_cartesian_coordinates(
-            self.curr_pose
+        camera_landmarks_curr = to_cartesian_coordinates(
+            np.linalg.inv(self.curr_pose)
             @ to_homogeneous_coordinates(self.curr_frame.features.landmarks)
         )
-        outliers = camera_landmarks[:, 2].flatten() < 0
+        camera_landmarks_prev = to_cartesian_coordinates(
+            np.linalg.inv(self.prev_pose)
+            @ to_homogeneous_coordinates(self.curr_frame.features.landmarks)
+        )
+        outliers = (camera_landmarks_curr[:, 2].flatten() < 0) | (
+            camera_landmarks_prev[:, 2].flatten() < 0
+        )
         self.curr_frame.features.landmarks[outliers] = np.nan
         self.reset_outliers(outliers)
 
