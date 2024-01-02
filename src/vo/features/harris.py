@@ -17,7 +17,7 @@ class HarrisCornerDetector:
         self,
         frame: Frame = None,
         patch_size: int = 9,
-        kappa: float = 0.08,
+        kappa: float = 0.09,
         num_keypoints: int = 1000,
         nonmaximum_supression_radius: int = 5,
         descriptor_radius: int = 9,
@@ -252,7 +252,7 @@ class HarrisCornerDetector:
         used = np.zeros(shape=(len(descriptors1)))
 
         for m, n in matches:
-            if m.distance < 0.75 * n.distance:
+            if m.distance < 0.85 * n.distance:
                 if used[m.trainIdx] == 0:
                     good.append([m.queryIdx, m.trainIdx])
                     used[m.trainIdx] = 1
