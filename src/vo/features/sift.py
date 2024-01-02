@@ -46,11 +46,14 @@ class SIFTDetector:
         used = np.zeros(shape=(len(new_frame.features.descriptors)))
 
         for m, n in matches:
-            assert m.distance < n.distance
             if m.distance < 0.8 * n.distance:
                 if used[m.trainIdx] == 0:
                     good.append([m.queryIdx, m.trainIdx])
                     used[m.trainIdx] = 1
+            elif n.distance < 0.8 * m.distance:
+                if used[n.trainIdx] == 0:
+                    good.append([n.queryIdx, n.trainIdx])
+                    used[n.trainIdx] = 1
         good = np.array(good)
         matches = Matches(curr_frame, new_frame, matches=good)
 
