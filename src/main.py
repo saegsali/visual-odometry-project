@@ -122,7 +122,7 @@ def plot_nr_of_landmarks(nr_of_landmarks):
     # fix the scaling of the axes
     # ax3.set_aspect("equal", adjustable="box")
     ax3.set_xlim(-20, 0)
-    ax3.set_ylim(0, 500)
+    ax3.set_ylim(0, 600)
     ax3.set_box_aspect(1.2)
     fig.canvas.draw()
     fig.canvas.flush_events()
