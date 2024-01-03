@@ -56,38 +56,34 @@ class LandmarksTriangulator:
         proj1 = self.camera1.intrinsic_matrix @ extrinsics_start
         proj2 = self.camera2.intrinsic_matrix @ extrinsics_end
 
-        P_open = []
+        if self._use_opencv:
+            P_open = []
 
-        for i in range(points_start.shape[0]):
-            P_open.append(
-                cv2.triangulatePoints(
-                    projMatr1=proj1[i],  # all have different start pose
-                    projMatr2=proj2,  # all have same end pose
-                    projPoints1=points_start[i].reshape(-1, 2).T,
-                    projPoints2=points_end[i].reshape(-1, 2).T,
-                ).T
-            )
+            for i in range(points_start.shape[0]):
+                P_open.append(
+                    cv2.triangulatePoints(
+                        projMatr1=proj1[i],  # all have different start pose
+                        projMatr2=proj2,  # all have same end pose
+                        projPoints1=points_start[i].reshape(-1, 2).T,
+                        projPoints2=points_end[i].reshape(-1, 2).T,
+                    ).T
+                )
 
-        P_open = np.concatenate(P_open)
-        P_open = P_open.reshape(-1, 4, 1)
+            P_open = np.concatenate(P_open)
+            P_open = P_open.reshape(-1, 4, 1)
+            return to_cartesian_coordinates(P_open)
+        else:
+            N = points_start.shape[0]
+            P = []
 
-        # proj1 = self.camera1.intrinsic_matrix @ extrinsics_start
-        # proj2 = self.camera2.intrinsic_matrix @ extrinsics_end
-
-        # A = np.concatenate(
-        #     [
-        #         to_skew_symmetric_matrix(to_homogeneous_coordinates(points_start))
-        #         @ proj1,
-        #         to_skew_symmetric_matrix(to_homogeneous_coordinates(points_end))
-        #         @ proj2.reshape(1, 3, 4),
-        #     ],
-        #     axis=1,
-        # )
-
-        # U, S, Vh = np.linalg.svd(A)
-        # P = Vh.T[:, -1].reshape(-1, 4, 1)  # last column of V
-
-        return to_cartesian_coordinates(P_open)
+            for i in range(N):
+                P.append(
+                    self._linear_triangulation(
+                        points_start[i : i + 1], points_end[i : i + 1], proj1[i], proj2
+                    )
+                )
+            P = np.concatenate(P)
+            return P
 
     def triangulate_matches(self, matches: Matches) -> np.ndarray:
         """Triangulate the 3D position of landmarks using matches from two frames,
@@ -356,13 +352,13 @@ class LandmarksTriangulator:
     def _linear_triangulation(self, points1, points2, C1, C2):
         """Linear Triangulation
         Input:
-        - p1 np.ndarray(3, N): homogeneous coordinates of points in image 1
-        - p2 np.ndarray(3, N): homogeneous coordinates of points in image 2
+        - p1 np.ndarray(N, 2, 1): points in image 1
+        - p2 np.ndarray(N, 2, 1): points in image 2
         - C1 np.ndarray(3, 4): camera (projection matrix) corresponding to first image, shape (3, 4)
         - C2 np.ndarray(3, 4): camera (projection matrix) corresponding to second image, shape (3,4)
 
         Output:
-        - P np.ndarray(4, N): homogeneous coordinates of 3-D points
+        - P np.ndarray(N, 3, 1):  3-D points
         """
 
         assert points1.shape == points2.shape, "Input points dimension mismatch"
