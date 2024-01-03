@@ -48,6 +48,7 @@ def plot_image(img):
     ax1.set_title("Current image", fontsize=8, fontweight="bold")
     # ax1.get_xaxis().set_visible(False)
     # ax1.get_yaxis().set_visible(False)
+    ax1.axis("off")
 
     fig.canvas.draw()
     fig.canvas.flush_events()

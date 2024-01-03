@@ -21,11 +21,13 @@ class KLTTracker:
     """
 
     # params for (ShiTomasi) corner detection
-    _feature_params = dict(maxCorners=500, qualityLevel=0.2, minDistance=7, blockSize=7)
+    _feature_params = dict(
+        maxCorners=500, qualityLevel=0.01, minDistance=8, blockSize=7
+    )
 
     # Parameters for Lucas Kanade optical flow
     _lk_params = dict(
-        winSize=(15, 15),
+        winSize=(17, 17),
         maxLevel=2,
         criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03),
     )
@@ -34,7 +36,7 @@ class KLTTracker:
     _colors = np.random.randint(0, 255, (_feature_params["maxCorners"], 3))
 
     # Only keep points with error less than this threshold
-    _error_threshold = 30
+    _error_threshold = 100
 
     def __init__(self, frame):
         self._min_inliers = 90
@@ -93,7 +95,7 @@ class KLTTracker:
         if (
             use_goodFeaturesToTrack
         ):  # use opencv's goodFeaturesToTrack (default is ShiTomasi)
-            features = cv2.goodFeaturesToTrack(img, mask=mask, **self._feature_params)
+            points = cv2.goodFeaturesToTrack(img, mask=mask, **self._feature_params)
         else:  # use Harris corner detection with subpixel refinement
             dst = cv2.cornerHarris(img, 2, 3, 0.04)
             dst = cv2.dilate(dst, None)
@@ -103,14 +105,14 @@ class KLTTracker:
             ret, labels, stats, centroids = cv2.connectedComponentsWithStats(dst)
             # define the criteria to stop and refine the corners
             criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
-            features = cv2.cornerSubPix(
+            points = cv2.cornerSubPix(
                 img, np.float32(centroids), (5, 5), (-1, -1), criteria
             )
 
-        # reshape features to (N,2,1)
-        features = features.reshape((-1, 2, 1))
-        self._num_features = features.shape[0]
-        return features
+        # reshape points to (N,2,1)
+        points = points.reshape((-1, 2, 1))
+        self._num_features = points.shape[0]
+        return points
 
     def update_features(self, new_keypoints: np.ndarray) -> Features:
         """Update the keypoints of the input frame. The keypoints are updated with the new keypoints.
@@ -217,7 +219,7 @@ class KLTTracker:
                 for x, y in self._old_frame.features.keypoints.reshape(-1, 2).astype(
                     int
                 ):
-                    cv2.circle(mask, (x, y), 3, 0, -1)
+                    cv2.circle(mask, (x, y), 5, 0, -1)
             # Update template features
             new_keypoints = self.find_corners(frame=self._old_frame, mask=mask)
 
@@ -245,6 +247,10 @@ class KLTTracker:
 
         # logical and of the two masks
         filter = np.logical_and(inliers, error)
+
+        if sys.gettrace() is not None:  # If debugger is attached
+            # print % of inliers
+            print(f"{np.sum(filter)/filter.shape[0]*100:.2f}% inliers")
 
         # # remove points which are not inliers and have high error
         # next_pts = next_pts[filter]
