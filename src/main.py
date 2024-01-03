@@ -36,7 +36,7 @@ plt.show()
 # pc_visualizer = PointCloudVisualizer()
 
 TRACKER_MODE = "sift"
-DATA_SET = "kitti"
+DATA_SET = "parking"
 SHOW_N_POSES = 20
 SHOW_TRACKS = False
 
@@ -167,7 +167,7 @@ def main():
         ransac_confidence=0.99,
     )
     pose_estimator = P3PPoseEstimator(
-        use_opencv=True,
+        use_opencv=False,
         intrinsic_matrix=camera.intrinsic_matrix,
         inlier_threshold=0.5,
         outlier_ratio=0.9,
