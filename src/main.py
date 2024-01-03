@@ -35,9 +35,10 @@ plt.show()
 
 # pc_visualizer = PointCloudVisualizer()
 
-TRACKER_MODE = "harris"
+TRACKER_MODE = "sift"
 DATA_SET = "kitti"
 SHOW_N_POSES = 20
+SHOW_TRACKS = False
 
 
 def plot_image(img):
@@ -55,6 +56,16 @@ def plot_image(img):
 def plot_trajectory_with_landmarks(trajectory, landmarks):
     t_vec = trajectory[-SHOW_N_POSES:, :3, 3]
 
+    # Extract most extreme landmarks in z and x directions
+    dist = np.linalg.norm(landmarks, axis=-2).flatten()
+    perc = np.percentile(dist, 75)
+
+    landmarks_x = landmarks[:, 0].flatten()
+    landmarks_z = landmarks[:, 2].flatten()
+    mask = dist <= perc
+    landmarks_x = landmarks_x[mask]
+    landmarks_z = landmarks_z[mask]
+
     # Extract x, y, z coordinates from the trajectory
     x = t_vec[:, 0]
     y = t_vec[:, 1]
@@ -63,7 +74,7 @@ def plot_trajectory_with_landmarks(trajectory, landmarks):
     # Plot the camera trajectory
     ax2.clear()
     ax2.plot(x, z, marker="o", linewidth=1, markersize=1)
-    ax2.scatter(landmarks[:, 0], landmarks[:, 2], marker="x", color="orange")
+    ax2.scatter(landmarks_x, landmarks_z, marker="x", color="orange")
 
     # ax2.set_xlabel("X-axis")
     # ax2.set_ylabel("Z-axis")
@@ -122,7 +133,7 @@ def plot_nr_of_landmarks(nr_of_landmarks):
     # fix the scaling of the axes
     # ax3.set_aspect("equal", adjustable="box")
     ax3.set_xlim(-20, 0)
-    ax3.set_ylim(0, 600)
+    ax3.set_ylim(0, y.max() * 1.2)
     ax3.set_box_aspect(1.2)
     fig.canvas.draw()
     fig.canvas.flush_events()
@@ -151,13 +162,13 @@ def main():
         use_ransac=True,
         use_opencv=True,
         outlier_ratio=0.9,
-        ransac_threshold=3.0,
+        ransac_threshold=0.25,
         ransac_confidence=0.99,
     )
     pose_estimator = P3PPoseEstimator(
-        use_opencv=False,
+        use_opencv=True,
         intrinsic_matrix=camera.intrinsic_matrix,
-        inlier_threshold=3,
+        inlier_threshold=0.5,
         outlier_ratio=0.9,
         confidence=0.99,
         nonlinear_refinement=True,
@@ -168,6 +179,7 @@ def main():
     state = State(init_frame)
 
     next(sequence)  # skip frame 1
+
     new_frame = next(sequence)
 
     tracker = Tracker(init_frame, mode=TRACKER_MODE)
@@ -234,7 +246,9 @@ def main():
         )
 
         # Plot keypoints here because afterwards we triangulate all of them anyways
-        img = plot_keypoints(new_frame.image, new_frame.features)
+        img = plot_keypoints(
+            new_frame.image, new_frame.features, show_tracks=SHOW_TRACKS
+        )
         img = display_keypoints_info(img, new_frame.features)
         # match_img = plot_matches(matches)
 

@@ -145,7 +145,7 @@ def plot_matches(matches: Matches) -> np.array:
     return img
 
 
-def plot_keypoints(image: np.array, features: Features) -> np.array:
+def plot_keypoints(image: np.array, features: Features, show_tracks=True) -> np.array:
     """Display the keypoint count of the image.
 
     Args:
@@ -174,25 +174,28 @@ def plot_keypoints(image: np.array, features: Features) -> np.array:
         colors=(0, 255, 0),
     )
 
-    # Draw tracks
-    image = draw_keypoints(
-        image,
-        features.tracks[features.matched_candidate_inliers],
-        colors=(100, 100, 100),
-    )
-    image = draw_lines(
-        image,
-        features.keypoints[features.candidate_mask],
-        features.tracks[features.candidate_mask],
-        colors=(0, 255, 0),
-    )
-    image = draw_lines(
-        image,
-        features.keypoints[
-            features.matched_candidate_inliers & ~features.candidate_mask
-        ],
-        features.tracks[features.matched_candidate_inliers & ~features.candidate_mask],
-        colors=(255, 255, 255),
-    )
+    if show_tracks:
+        # Draw tracks
+        image = draw_keypoints(
+            image,
+            features.tracks[features.matched_candidate_inliers],
+            colors=(100, 100, 100),
+        )
+        image = draw_lines(
+            image,
+            features.keypoints[features.candidate_mask],
+            features.tracks[features.candidate_mask],
+            colors=(0, 255, 0),
+        )
+        image = draw_lines(
+            image,
+            features.keypoints[
+                features.matched_candidate_inliers & ~features.candidate_mask
+            ],
+            features.tracks[
+                features.matched_candidate_inliers & ~features.candidate_mask
+            ],
+            colors=(255, 255, 255),
+        )
 
     return image
