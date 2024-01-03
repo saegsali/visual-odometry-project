@@ -104,6 +104,11 @@ class State:
         self.curr_frame.features.landmarks[outliers] = np.nan
         self.reset_outliers(outliers)
 
+        # # remove landmarks which are too far away
+        # outliers = (np.linalg.norm(camera_landmarks_curr, axis=1) > 1000).flatten()
+        # self.curr_frame.features.landmarks[outliers] = np.nan
+        # self.reset_outliers(outliers)
+
     def get_frame(self) -> Frame:
         return self.curr_frame
 
