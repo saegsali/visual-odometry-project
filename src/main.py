@@ -58,7 +58,7 @@ def plot_trajectory_with_landmarks(trajectory, landmarks):
     t_vec = trajectory[-SHOW_N_POSES:, :3, 3]
 
     # Extract most extreme landmarks in z and x directions
-    dist = np.linalg.norm(landmarks, axis=-2).flatten()
+    dist = np.linalg.norm(landmarks.reshape(-1, 3) - t_vec[-1], axis=-1)
     perc = np.percentile(dist, 75)
 
     landmarks_x = landmarks[:, 0].flatten()

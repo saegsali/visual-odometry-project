@@ -90,6 +90,8 @@ class State:
     def _check_landmarks(self) -> None:
         # check if a landmark is behind the camera or not
         # convert landmarks to camera coordinates
+        # we can check *all* landmarks because otherwise they wouldnt be visible in camera frames
+        # even if triangulated previously
         camera_landmarks_curr = to_cartesian_coordinates(
             np.linalg.inv(self.curr_pose)
             @ to_homogeneous_coordinates(self.curr_frame.features.landmarks)
@@ -104,8 +106,17 @@ class State:
         self.curr_frame.features.landmarks[outliers] = np.nan
         self.reset_outliers(outliers)
 
-        # # remove landmarks which are too far away
-        # outliers = (np.linalg.norm(camera_landmarks_curr, axis=1) > 1000).flatten()
+        # Remove landmarks which are too far away
+        # dist = np.linalg.norm(
+        #     camera_landmarks_curr[self.curr_frame.features.triangulate_inliers].reshape(
+        #         -1, 3
+        #     ),
+        #     axis=-1,
+        # )
+        # perc = np.percentile(dist, 95)
+        # print(perc)
+        # outliers = np.zeros(shape=(len(self.curr_frame.features.landmarks)), dtype=bool)
+        # outliers[self.curr_frame.features.triangulate_inliers] = dist > perc
         # self.curr_frame.features.landmarks[outliers] = np.nan
         # self.reset_outliers(outliers)
 
