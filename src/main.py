@@ -182,14 +182,14 @@ def main():
         use_opencv=True,
         outlier_ratio=0.9,
         ransac_threshold=0.25,
-        ransac_confidence=0.99,
+        ransac_confidence=0.999,
     )
     pose_estimator = P3PPoseEstimator(
         use_opencv=True,
         intrinsic_matrix=camera.intrinsic_matrix,
         inlier_threshold=0.5,
         outlier_ratio=0.9,
-        confidence=0.99,
+        confidence=0.999,
         nonlinear_refinement=True,
     )
 
