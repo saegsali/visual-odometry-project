@@ -2,6 +2,8 @@ import numpy as np
 import cv2
 import time
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+
 from tqdm import tqdm
 from collections import deque
 
@@ -23,6 +25,8 @@ from vo.sensors import Camera
 
 
 fig = plt.figure()
+mng = plt.get_current_fig_manager()
+mng.full_screen_toggle()
 # fig.suptitle("Camera Trajectory", fontsize=16)
 
 ax1 = fig.add_subplot(2, 4, (1, 2))
@@ -32,6 +36,8 @@ ax4 = fig.add_subplot(2, 4, 6)
 plt.ion()
 plt.pause(1.0e-6)
 plt.show()
+
+# time.sleep(10)  # start video recording
 
 # pc_visualizer = PointCloudVisualizer()
 
@@ -49,8 +55,6 @@ def plot_image(img):
     # ax1.get_xaxis().set_visible(False)
     # ax1.get_yaxis().set_visible(False)
     ax1.axis("off")
-
-    import matplotlib.lines as mlines
 
     red_line = mlines.Line2D([], [], color=(1, 0, 0), markersize=10, label="Unmatched")
     blue_line = mlines.Line2D([], [], color=(0, 1, 1), markersize=10, label="Matched")
@@ -264,11 +268,6 @@ def main():
             state.curr_frame.features.matched_candidate_inliers
         )
 
-        # Plot keypoints here because afterwards we triangulate all of them anyways
-        img = plot_keypoints(
-            new_frame.image, new_frame.features, show_tracks=SHOW_TRACKS
-        )
-        img = display_keypoints_info(img, new_frame.features)
         # match_img = plot_matches(matches)
 
         # Triangulate new landmarks
@@ -285,6 +284,12 @@ def main():
             # pc_visualizer.visualize_points(landmarks_world)
 
         # Update the trajectory and nr of landmarks arrays
+        # Plot keypoints here because afterwards we triangulate all of them anyways
+        img = plot_keypoints(
+            new_frame.image, new_frame.features, show_tracks=SHOW_TRACKS
+        )
+        img = display_keypoints_info(img, new_frame.features)
+
         trajectory.append(state.get_pose())
         nr_of_landmarks.append(
             len(state.curr_frame.features.triangulated_inliers_landmarks)
@@ -317,6 +322,9 @@ def main():
         # k = cv2.waitKey(5) & 0xFF  # 30ms delay -> try lower value for more FPS :)
         # if k == 27:
         #     break
+
+    # End of loop, make screenshot of figure
+    fig.savefig("full_trajectory.pdf")
 
 
 if __name__ == "__main__":
