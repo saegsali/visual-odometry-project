@@ -36,7 +36,7 @@ plt.show()
 # pc_visualizer = PointCloudVisualizer()
 
 TRACKER_MODE = "sift"
-DATA_SET = "parking"
+DATA_SET = "kitti"
 SHOW_N_POSES = 20
 SHOW_TRACKS = False
 
@@ -49,6 +49,24 @@ def plot_image(img):
     # ax1.get_xaxis().set_visible(False)
     # ax1.get_yaxis().set_visible(False)
     ax1.axis("off")
+
+    import matplotlib.lines as mlines
+
+    red_line = mlines.Line2D([], [], color=(1, 0, 0), markersize=10, label="Unmatched")
+    blue_line = mlines.Line2D([], [], color=(0, 1, 1), markersize=10, label="Matched")
+    green_line = mlines.Line2D(
+        [], [], color=(0, 1, 0), markersize=10, label="Triangulated"
+    )
+    ax1.legend(
+        handles=[red_line, blue_line, green_line],
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.02),
+        fancybox=False,
+        shadow=False,
+        ncol=3,
+        frameon=False,
+        fontsize=8,
+    )
 
     fig.canvas.draw()
     fig.canvas.flush_events()
@@ -167,7 +185,7 @@ def main():
         ransac_confidence=0.99,
     )
     pose_estimator = P3PPoseEstimator(
-        use_opencv=False,
+        use_opencv=True,
         intrinsic_matrix=camera.intrinsic_matrix,
         inlier_threshold=0.5,
         outlier_ratio=0.9,
