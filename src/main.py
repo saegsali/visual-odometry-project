@@ -37,12 +37,12 @@ plt.ion()
 plt.pause(1.0e-6)
 plt.show()
 
-# time.sleep(10)  # start video recording
+time.sleep(10)  # start video recording
 
 # pc_visualizer = PointCloudVisualizer()
 
-TRACKER_MODE = "sift"
-DATA_SET = "kitti"
+TRACKER_MODE = "harris"
+DATA_SET = "malaga"
 SHOW_N_POSES = 20
 SHOW_TRACKS = False
 
@@ -79,15 +79,18 @@ def plot_image(img):
 def plot_trajectory_with_landmarks(trajectory, landmarks):
     t_vec = trajectory[-SHOW_N_POSES:, :3, 3]
 
-    # Extract most extreme landmarks in z and x directions
-    dist = np.linalg.norm(landmarks.reshape(-1, 3) - t_vec[-1], axis=-1)
-    perc = np.percentile(dist, 75)
-
     landmarks_x = landmarks[:, 0].flatten()
     landmarks_z = landmarks[:, 2].flatten()
-    mask = dist <= perc
-    landmarks_x = landmarks_x[mask]
-    landmarks_z = landmarks_z[mask]
+
+    # Extract most extreme landmarks in z and x directions
+    dist = np.linalg.norm(landmarks.reshape(-1, 3) - t_vec[-1], axis=-1)
+
+    if len(dist) > 0:
+        perc = np.percentile(dist, 75)
+
+        mask = dist <= perc
+        landmarks_x = landmarks_x[mask]
+        landmarks_z = landmarks_z[mask]
 
     # Extract x, y, z coordinates from the trajectory
     x = t_vec[:, 0]
@@ -191,9 +194,9 @@ def main():
     pose_estimator = P3PPoseEstimator(
         use_opencv=True,
         intrinsic_matrix=camera.intrinsic_matrix,
-        inlier_threshold=0.5,
+        inlier_threshold=1.25,
         outlier_ratio=0.9,
-        confidence=0.999,
+        confidence=0.9999,
         nonlinear_refinement=True,
     )
 
