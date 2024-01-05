@@ -45,8 +45,10 @@ class Features:
         self._uids = uids
 
         self._tracks = self._keypoints.copy()  # default: new track starts at keypoint
-        self._poses = np.stack(
-            [np.eye(4)] * self._keypoints.shape[0]
+        self._poses = (
+            np.stack([np.eye(4)] * self._keypoints.shape[0])
+            if self._keypoints.shape[0] > 0
+            else np.empty(shape=(0, 4, 4))
         )  # default: unkown pose
 
         self._candidate_mask = np.zeros(shape=(n_keypoints,)).astype(bool)
