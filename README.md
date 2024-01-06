@@ -1,6 +1,6 @@
 # Visual Odometry Project
 This is a project for the course [Vision Algorithms for Mobile Robotics](https://rpg.ifi.uzh.ch/teaching.html#VAMR) of the University of Zurich given by Prof. Dr. Davide Scaramuzza in the fall semester 2023.  
-The goal of this project is to implement a simple, monocular, visual odometry (VO) pipeline with the most essential features: initialization of 3D landmarks, keypoint tracking between two frames, pose estimation using established 2D ↔ 3D correspondences, and triangulation of new land- marks.
+The goal of this project is to implement a simple, monocular, visual odometry (VO) pipeline with the most essential features: initialization of 3D landmarks, keypoint tracking between two frames, pose estimation using established 2D ↔ 3D correspondences, and triangulation of new landmarks.
 
 ## Installation
 1. **Clone the repository**:  
@@ -42,14 +42,9 @@ python src/main.py
 ```
 
 ## Recordings
-Recordings of the pipeline for different datasets can be found here:
-- Malaga Urban Dataset: https://youtu.be/
-- KITTI Dataset: https://youtu.be/
-- Parking Dataset: https://youtu.be/
+Recordings of the pipeline for different datasets can be found [here](https://youtube.com/playlist?list=PLTMAp8e9IsHHoh7hESWzY2QTIBMsnbQrl&si=ybuK9u0RFydrHcZl)
 
-The recordings were made on a MacBook Air (2022) with the following specs:
-- Processor: Apple M2 8-Core CPU (3.5 GHz for 4 performance cores)
-- Memory: 16 GB (LPDDR5)
+The specifications of the machine used for the respective recordings can be found in the description of the videos.
 
 Our implementation of the visual odometry pipeline as of now is not particularly optimized for speed and uses just one thread. A significant amount of time is spent on plotting the point cloud and the trajectory.  
 Note that performance and accuracy of the pipeline depends on the tracking algorithm used. In the recordings above, the SIFT feature detector and tracker was used.
