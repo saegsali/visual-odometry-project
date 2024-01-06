@@ -42,9 +42,9 @@ python src/main.py
 ```
 
 ## Recordings
-Recordings of the pipeline for different datasets can be found [here](https://youtube.com/playlist?list=PLTMAp8e9IsHHoh7hESWzY2QTIBMsnbQrl&si=ybuK9u0RFydrHcZl)
+Recordings of the pipeline for different datasets can be found [here](https://youtube.com/playlist?list=PLTMAp8e9IsHHoh7hESWzY2QTIBMsnbQrl&si=ybuK9u0RFydrHcZl).
 
-The specifications of the machine used for the respective recordings can be found in the description of the videos.
+The specifications of the machine used for the recording can be found in the description of the respective video.
 
 Our implementation of the visual odometry pipeline as of now is not particularly optimized for speed and uses just one thread. A significant amount of time is spent on plotting the point cloud and the trajectory.  
 Note that performance and accuracy of the pipeline depends on the tracking algorithm used. In the recordings above, the SIFT feature detector and tracker was used.
